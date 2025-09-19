@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Eye, EyeOff, Smartphone } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { SuccessModal } from "@/components/success-modal"
 
 export default function AuthPage() {
   const [isLoading, setIsLoading] = useState(false)
@@ -26,6 +27,11 @@ export default function AuthPage() {
     confirmPassword: "",
   })
   const [error, setError] = useState("")
+  const [successModal, setSuccessModal] = useState({
+    isOpen: false,
+    message: "",
+    subMessage: "",
+  })
   const router = useRouter()
   const { toast } = useToast()
   const supabase = createClient()
@@ -87,9 +93,10 @@ export default function AuthPage() {
       if (error) {
         setError(error.message)
       } else {
-        toast({
-          title: "Inscription réussie",
-          description: "Vérifiez votre email pour confirmer votre compte",
+        setSuccessModal({
+          isOpen: true,
+          message: "Inscription réussie!",
+          subMessage: "Vérifiez votre email pour confirmer votre compte",
         })
         setActiveTab("login")
       }
@@ -102,6 +109,12 @@ export default function AuthPage() {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <SuccessModal
+        isOpen={successModal.isOpen}
+        onClose={() => setSuccessModal({ isOpen: false, message: "", subMessage: "" })}
+        message={successModal.message}
+        subMessage={successModal.subMessage}
+      />
       <Card className="w-full max-w-md bg-card border-border shadow-lg">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">

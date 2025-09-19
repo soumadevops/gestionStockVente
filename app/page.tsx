@@ -4,6 +4,7 @@
 import type React from "react"
 
 import { useState, useEffect, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   AlertDialog,
@@ -20,6 +21,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
 import {
@@ -47,6 +49,12 @@ import {
 import { createClient } from "@/lib/supabase/client"
 
 import { SuccessModal } from "@/components/success-modal"
+import { DashboardView } from "@/components/dashboard/dashboard-view"
+import { StockView } from "@/components/stock/stock-view"
+import { SalesView } from "@/components/sales/sales-view"
+import { InvoicesView } from "@/components/invoices/invoices-view"
+import { SettingsView } from "@/components/settings/settings-view"
+import { LoadingPage, LoadingCard } from "@/components/ui/loading"
 
 interface Sale {
   id: string
@@ -80,6 +88,7 @@ interface CompanySettings {
   id: string
   nom_compagnie: string
   nom_admin: string
+  logo_url?: string
   created_at?: string
   updated_at?: string
 }
@@ -113,8 +122,30 @@ interface InvoiceItem {
   total_price: number
 }
 
+const PHONE_BRANDS = [
+  "Apple",
+  "Samsung",
+  "Huawei",
+  "Xiaomi",
+  "Oppo",
+  "Vivo",
+  "OnePlus",
+  "Google",
+  "Sony",
+  "LG",
+  "Nokia",
+  "Motorola",
+  "Asus",
+  "Realme",
+  "Infinix",
+  "Tecno",
+  "Itel",
+  "Autre"
+]
+
 export default function SalesManagementApp() {
   const { toast } = useToast()
+  const router = useRouter()
 
   const [searchTerm, setSearchTerm] = useState("")
   const [showAddForm, setShowAddForm] = useState(false)
@@ -124,6 +155,7 @@ export default function SalesManagementApp() {
   const [activeTab, setActiveTab] = useState("dashboard")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [user, setUser] = useState<any>(null)
 
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [showAddInvoiceForm, setShowAddInvoiceForm] = useState(false)
@@ -157,9 +189,12 @@ export default function SalesManagementApp() {
   const [companySettings, setCompanySettings] = useState({
     companyName: "VentesPro",
     adminName: "Administrateur",
+    logoUrl: "",
   })
   const [isEditingSettings, setIsEditingSettings] = useState(false)
   const [tempSettings, setTempSettings] = useState(companySettings)
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
     nom_prenom_client: "",
@@ -190,6 +225,20 @@ export default function SalesManagementApp() {
 
   const supabase = createClient()
 
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut()
+      router.push("/auth")
+    } catch (error) {
+      console.error("Error signing out:", error)
+      toast({
+        title: "Erreur",
+        description: "Erreur lors de la déconnexion",
+        variant: "destructive",
+      })
+    }
+  }
+
   const fetchInvoices = async () => {
     try {
       console.log("[v0] Fetching invoices...")
@@ -217,7 +266,22 @@ export default function SalesManagementApp() {
   }
 
   useEffect(() => {
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        router.push("/auth")
+        return
+      }
+      setUser(user)
+    }
+
+    checkUser()
+  }, [supabase.auth, router])
+
+  useEffect(() => {
     const loadAllData = async () => {
+      if (!user) return
+
       try {
         setLoading(true)
         console.log("[v0] Starting to load all data...")
@@ -229,10 +293,10 @@ export default function SalesManagementApp() {
         }
 
         const [salesResponse, productsResponse, invoicesResponse, settingsResponse] = await Promise.all([
-          supabase.from("sales").select("*").order("created_at", { ascending: false }),
-          supabase.from("products").select("*").order("created_at", { ascending: false }),
-          supabase.from("invoices").select("*, invoice_items (*)").order("created_at", { ascending: false }),
-          supabase.from("company_settings").select("*").limit(1).single(),
+          supabase.from("sales").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
+          supabase.from("products").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
+          supabase.from("invoices").select("*, invoice_items (*)").eq("user_id", user.id).order("created_at", { ascending: false }),
+          supabase.from("company_settings").select("*").eq("user_id", user.id).limit(1).single(),
         ])
 
         if (salesResponse.error) throw salesResponse.error
@@ -252,27 +316,46 @@ export default function SalesManagementApp() {
           setCompanySettings({
             companyName: settingsResponse.data.nom_compagnie,
             adminName: settingsResponse.data.nom_admin,
+            logoUrl: settingsResponse.data.logo_url || "",
           })
           setTempSettings({
             companyName: settingsResponse.data.nom_compagnie,
             adminName: settingsResponse.data.nom_admin,
+            logoUrl: settingsResponse.data.logo_url || "",
           })
+          setLogoPreview(settingsResponse.data.logo_url || null)
         }
         console.log("[v0] Settings loaded.")
 
         console.log("[v0] All data loading completed successfully.")
       } catch (err) {
         console.error("[v0] Error loading data:", err)
-        setError(err instanceof Error ? err.message : "Une erreur est survenue")
+        let errorMessage = "Une erreur est survenue lors du chargement des données"
+
+        if (err instanceof Error) {
+          if (err.message.includes("42P01")) {
+            errorMessage = "Les tables de la base de données n'existent pas. Veuillez exécuter les scripts SQL dans le dossier 'scripts' via le tableau de bord Supabase."
+          } else if (err.message.includes("permission denied")) {
+            errorMessage = "Erreur de permissions sur la base de données. Vérifiez vos droits d'accès dans Supabase."
+          } else if (err.message.includes("connection")) {
+            errorMessage = "Erreur de connexion à la base de données. Vérifiez votre connexion internet et les paramètres dans .env.local."
+          } else {
+            errorMessage = err.message
+          }
+        }
+
+        setError(errorMessage)
       } finally {
         setLoading(false)
       }
     }
 
     loadAllData()
-  }, [])
+  }, [user])
 
   const handleAddInvoice = useCallback(async () => {
+    if (!user) return
+
     try {
       console.log("[v0] Starting invoice creation...")
       console.log("[v0] Invoice form data:", invoiceFormData)
@@ -342,6 +425,7 @@ export default function SalesManagementApp() {
             tax_amount,
             total_amount,
             notes: invoiceFormData.notes || null,
+            user_id: user.id,
           },
         ])
         .select()
@@ -361,6 +445,7 @@ export default function SalesManagementApp() {
         quantity: item.quantity,
         unit_price: item.unit_price,
         total_price: item.quantity * item.unit_price,
+        user_id: user.id,
       }))
 
       const { error: itemsError } = await supabase.from("invoice_items").insert(itemsToInsert)
@@ -403,8 +488,14 @@ export default function SalesManagementApp() {
   }, [invoiceFormData, invoiceItems, toast])
 
   const handleDeleteInvoice = async (id: string) => {
+    if (!user) return
+
     try {
-      const { error } = await supabase.from("invoices").delete().eq("id", id)
+      const { error } = await supabase
+        .from("invoices")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user.id)
 
       if (error) throw error
 
@@ -610,11 +701,48 @@ export default function SalesManagementApp() {
   }
 
   const handleAddProduct = useCallback(async () => {
+    if (!user) {
+      toast({
+        title: "Erreur",
+        description: "Vous devez être connecté pour ajouter un produit",
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
-      if (!productFormData.nom_produit.trim() || !productFormData.marque.trim()) {
+      // Validation des champs requis
+      if (!productFormData.nom_produit.trim()) {
         toast({
           title: "Erreur",
-          description: "Le nom du produit et la marque sont requis",
+          description: "Le nom du produit est requis",
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (!productFormData.marque.trim()) {
+        toast({
+          title: "Erreur",
+          description: "La marque est requise",
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (!productFormData.prix_unitaire || isNaN(Number.parseFloat(productFormData.prix_unitaire)) || Number.parseFloat(productFormData.prix_unitaire) <= 0) {
+        toast({
+          title: "Erreur",
+          description: "Le prix unitaire doit être un nombre positif",
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (!productFormData.quantite_stock || isNaN(Number.parseInt(productFormData.quantite_stock)) || Number.parseInt(productFormData.quantite_stock) < 0) {
+        toast({
+          title: "Erreur",
+          description: "La quantité en stock doit être un nombre positif ou nul",
           variant: "destructive",
         })
         return
@@ -623,36 +751,61 @@ export default function SalesManagementApp() {
       let photoUrl = null
 
       if (productPhoto) {
-        const fileExt = productPhoto.name.split(".").pop()
-        const fileName = `${Date.now()}.${fileExt}`
-        const { error: uploadError } = await supabase.storage.from("product-photos").upload(fileName, productPhoto)
+        try {
+          const fileExt = productPhoto.name.split(".").pop()
+          const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
+          const { error: uploadError } = await supabase.storage.from("product-photos").upload(fileName, productPhoto)
 
-        if (uploadError) {
-          console.error("Error uploading photo:", uploadError)
-        } else {
-          const {
-            data: { publicUrl },
-          } = supabase.storage.from("product-photos").getPublicUrl(fileName)
-          photoUrl = publicUrl
+          if (uploadError) {
+            console.error("Error uploading photo:", uploadError)
+            toast({
+              title: "Avertissement",
+              description: "Erreur lors du téléchargement de la photo, le produit sera ajouté sans photo",
+              variant: "default",
+            })
+          } else {
+            const {
+              data: { publicUrl },
+            } = supabase.storage.from("product-photos").getPublicUrl(fileName)
+            photoUrl = publicUrl
+          }
+        } catch (photoError) {
+          console.error("Photo upload failed:", photoError)
+          toast({
+            title: "Avertissement",
+            description: "Erreur lors du téléchargement de la photo, le produit sera ajouté sans photo",
+            variant: "default",
+          })
         }
+      }
+
+      const productData = {
+        nom_produit: productFormData.nom_produit.trim(),
+        marque: productFormData.marque.trim(),
+        modele: productFormData.modele.trim(),
+        prix_unitaire: Number.parseFloat(productFormData.prix_unitaire),
+        quantite_stock: Number.parseInt(productFormData.quantite_stock),
+        description: productFormData.description.trim() || null,
+        imei_telephone: productFormData.imei_telephone.trim() || null,
+        provenance: productFormData.provenance.trim() || null,
+        photo_url: photoUrl,
+        user_id: user.id,
       }
 
       const { data, error } = await supabase
         .from("products")
-        .insert([
-          {
-            ...productFormData,
-            prix_unitaire: Number.parseFloat(productFormData.prix_unitaire),
-            quantite_stock: Number.parseInt(productFormData.quantite_stock),
-            photo_url: photoUrl,
-          },
-        ])
+        .insert([productData])
         .select()
 
-      if (error) throw error
+      if (error) {
+        console.error("Database error:", error)
+        throw new Error(`Erreur lors de l'ajout du produit: ${error.message}`)
+      }
 
       if (data && data[0]) {
         setProducts([data[0], ...products])
+      } else {
+        throw new Error("Aucune donnée retournée après l'ajout du produit")
       }
 
       setProductFormData({
@@ -682,7 +835,7 @@ export default function SalesManagementApp() {
         variant: "destructive",
       })
     }
-  }, [productFormData, toast, productPhoto, products, supabase.storage])
+  }, [productFormData, toast, productPhoto, products, supabase.storage, user])
 
   const handleEditProduct = (id: string) => {
     const product = products.find((p) => p.id === id)
@@ -704,6 +857,8 @@ export default function SalesManagementApp() {
   }
 
   const handleSaveProductEdit = async () => {
+    if (!user) return
+
     if (
       editingProductId &&
       productFormData.nom_produit &&
@@ -739,6 +894,7 @@ export default function SalesManagementApp() {
             photo_url: photoUrl,
           })
           .eq("id", editingProductId)
+          .eq("user_id", user.id)
           .select()
 
         if (error) throw error
@@ -785,6 +941,8 @@ export default function SalesManagementApp() {
   }
 
   const handleAddVente = async () => {
+    if (!user) return
+
     if (
       formData.nom_prenom_client &&
       formData.numero_telephone &&
@@ -801,6 +959,7 @@ export default function SalesManagementApp() {
             {
               ...formData,
               prix: Number.parseInt(formData.prix),
+              user_id: user.id,
             },
           ])
           .select()
@@ -838,6 +997,8 @@ export default function SalesManagementApp() {
   }
 
   const handleSaveEdit = async () => {
+    if (!user) return
+
     if (
       editingId &&
       formData.nom_prenom_client &&
@@ -856,6 +1017,7 @@ export default function SalesManagementApp() {
             prix: Number.parseInt(formData.prix),
           })
           .eq("id", editingId)
+          .eq("user_id", user.id)
           .select()
 
         if (error) throw error
@@ -896,28 +1058,105 @@ export default function SalesManagementApp() {
   }
 
   const handleSaveSettings = async () => {
+    if (!user) return
+
+    // Validation
+    if (!tempSettings.companyName.trim()) {
+      toast({
+        title: "Erreur",
+        description: "Le nom de l'entreprise est requis",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!tempSettings.adminName.trim()) {
+      toast({
+        title: "Erreur",
+        description: "Le nom de l'administrateur est requis",
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
+      let logoUrl = tempSettings.logoUrl
+
+      if (logoFile) {
+        const fileExt = logoFile.name.split(".").pop()
+        const fileName = `${user.id}/logo.${fileExt}`
+        const { error: uploadError } = await supabase.storage
+          .from("company-logos")
+          .upload(fileName, logoFile, { upsert: true })
+
+        if (uploadError) {
+          console.error("Error uploading logo:", uploadError)
+          toast({
+            title: "Avertissement",
+            description: "Erreur lors du téléchargement du logo, les paramètres seront sauvegardés sans logo",
+            variant: "default",
+          })
+        } else {
+          const { data: { publicUrl } } = supabase.storage
+            .from("company-logos")
+            .getPublicUrl(fileName)
+          logoUrl = publicUrl
+        }
+      }
+
       await supabase.from("company_settings").upsert({
-        nom_compagnie: tempSettings.companyName,
-        nom_admin: tempSettings.adminName,
+        user_id: user.id,
+        nom_compagnie: tempSettings.companyName.trim(),
+        nom_admin: tempSettings.adminName.trim(),
+        logo_url: logoUrl,
       })
 
-      setCompanySettings(tempSettings)
+      setCompanySettings({ ...tempSettings, logoUrl })
       setIsEditingSettings(false)
+      setLogoFile(null)
+
+      toast({
+        title: "Paramètres sauvegardés",
+        description: "Vos paramètres ont été mis à jour avec succès",
+      })
     } catch (err) {
       console.error("Error saving settings:", err)
-      setError(err instanceof Error ? err.message : "Erreur lors de la sauvegarde")
+      toast({
+        title: "Erreur",
+        description: `Erreur lors de la sauvegarde: ${err instanceof Error ? err.message : "Erreur inconnue"}`,
+        variant: "destructive",
+      })
     }
   }
 
   const handleCancelSettings = () => {
     setTempSettings(companySettings)
     setIsEditingSettings(false)
+    setLogoFile(null)
+    setLogoPreview(companySettings.logoUrl || null)
+  }
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setLogoFile(file)
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setLogoPreview(e.target?.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
   }
 
   const handleDeleteProduct = async (id: string) => {
+    if (!user) return
+
     try {
-      const { error } = await supabase.from("products").delete().eq("id", id)
+      const { error } = await supabase
+        .from("products")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user.id)
 
       if (error) throw error
 
@@ -938,6 +1177,8 @@ export default function SalesManagementApp() {
   }
 
   const handleAddSale = useCallback(async () => {
+    if (!user) return
+
     try {
       if (!saleFormData.nom_prenom_client.trim() || !saleFormData.modele.trim()) {
         toast({
@@ -954,6 +1195,7 @@ export default function SalesManagementApp() {
           {
             ...saleFormData,
             prix: Number.parseInt(saleFormData.prix),
+            user_id: user.id,
           },
         ])
         .select()
@@ -991,8 +1233,14 @@ export default function SalesManagementApp() {
   }, [saleFormData, supabase, toast, ventes])
 
   const handleDeleteSale = async (id: string) => {
+    if (!user) return
+
     try {
-      const { error } = await supabase.from("sales").delete().eq("id", id)
+      const { error } = await supabase
+        .from("sales")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user.id)
 
       if (error) throw error
 
@@ -1012,1068 +1260,46 @@ export default function SalesManagementApp() {
     }
   }
 
-  const InvoicesView = () => (
-    <div className="space-y-6">
-      <div className="bg-primary rounded-xl p-6 text-white">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold mb-2 text-white">Gestion des Factures</h1>
-            <p className="text-white">Créez, modifiez et imprimez vos factures</p>
-          </div>
-          <Button onClick={() => setShowAddInvoiceForm(true)} className="bg-white text-primary hover:bg-gray-100">
-            <Plus className="w-4 h-4 mr-2" />
-            Nouvelle Facture
-          </Button>
-        </div>
-      </div>
-
-      {showAddInvoiceForm && (
-        <Card className="bg-card border-border shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-foreground">{editingInvoiceId ? "Modifier la Facture" : "Nouvelle Facture"}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault()
-                handleAddInvoice()
-              }}
-              className="space-y-4"
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="client_name" className="text-foreground">
-                    Nom du Client *
-                  </Label>
-                  <Input
-                    id="client_name"
-                    value={invoiceFormData.client_name}
-                    onChange={(e) => handleInvoiceFormChange("client_name", e.target.value)}
-                    required
-                    className="bg-background border-border text-foreground"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="client_email" className="text-foreground">
-                    Email
-                  </Label>
-                  <Input
-                    id="client_email"
-                    type="email"
-                    value={invoiceFormData.client_email}
-                    onChange={(e) => handleInvoiceFormChange("client_email", e.target.value)}
-                    className="bg-background border-border text-foreground"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="client_phone" className="text-foreground">
-                    Téléphone
-                  </Label>
-                  <Input
-                    id="client_phone"
-                    value={invoiceFormData.client_phone}
-                    onChange={(e) => handleInvoiceFormChange("client_phone", e.target.value)}
-                    className="bg-background border-border text-foreground"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="due_date" className="text-foreground">
-                    Date d'échéance
-                  </Label>
-                  <Input
-                    id="due_date"
-                    type="date"
-                    value={invoiceFormData.due_date}
-                    onChange={(e) => handleInvoiceFormChange("due_date", e.target.value)}
-                    className="bg-background border-border text-foreground"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="client_address" className="text-foreground">
-                  Adresse
-                </Label>
-                <textarea
-                  id="client_address"
-                  value={invoiceFormData.client_address}
-                  onChange={(e) => handleInvoiceFormChange("client_address", e.target.value)}
-                  className="w-full p-2 border border-border rounded-md bg-background text-foreground"
-                  rows={3}
-                />
-              </div>
-
-              {/* Invoice Items */}
-              <div>
-                <div className="flex justify-between items-center mb-4">
-                  <Label className="text-foreground text-lg">Articles/Services</Label>
-                  <Button type="button" onClick={addInvoiceItem} variant="outline" size="sm">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Ajouter un article
-                  </Button>
-                </div>
-
-                {invoiceItems.map((item, index) => (
-                  <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-2 mb-2 p-3 border border-border rounded">
-                    <Input
-                      placeholder="Nom du produit/service"
-                      value={item.product_name}
-                      onChange={(e) => handleInvoiceItemChange(index, "product_name", e.target.value)}
-                      className="bg-background border-border text-foreground"
-                    />
-                    <Input
-                      placeholder="Description"
-                      value={item.description}
-                      onChange={(e) => handleInvoiceItemChange(index, "description", e.target.value)}
-                      className="bg-background border-border text-foreground"
-                    />
-                    <Input
-                      type="number"
-                      placeholder="Quantité"
-                      value={item.quantity}
-                      onChange={(e) => handleInvoiceItemChange(index, "quantity", Number.parseInt(e.target.value) || 1)}
-                      className="bg-background border-border text-foreground"
-                    />
-                    <Input
-                      type="number"
-                      step="0.01"
-                      placeholder="Prix unitaire (FCFA)"
-                      value={item.unit_price}
-                      onChange={(e) =>
-                        handleInvoiceItemChange(index, "unit_price", Number.parseFloat(e.target.value) || 0)
-                      }
-                      className="bg-background border-border text-foreground"
-                    />
-                    <div className="flex items-center justify-between">
-                      <span className="text-foreground font-medium">
-                        {(item.quantity * item.unit_price).toLocaleString("fr-FR")} FCFA
-                      </span>
-                      {invoiceItems.length > 1 && (
-                        <Button
-                          type="button"
-                          onClick={() => removeInvoiceItem(index)}
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-500 hover:text-red-700"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="tax_rate" className="text-foreground">
-                    Taux de TVA (%)
-                  </Label>
-                  <Input
-                    id="tax_rate"
-                    type="number"
-                    step="0.01"
-                    value={invoiceFormData.tax_rate}
-                    onChange={(e) => setInvoiceFormData({ ...invoiceFormData, tax_rate: e.target.value })}
-                    className="bg-background border-border text-foreground"
-                  />
-                </div>
-                <div>
-                  <Label className="text-foreground">Total estimé</Label>
-                  <div className="p-2 bg-muted rounded text-foreground">
-                    {(() => {
-                      const subtotal = invoiceItems.reduce((sum, item) => sum + item.quantity * item.unit_price, 0)
-                      const taxRate = Number.parseFloat(invoiceFormData.tax_rate) / 100
-                      const taxAmount = subtotal * taxRate
-                      const total = subtotal + taxAmount
-                      return `${total.toLocaleString("fr-FR")} FCFA (dont ${taxAmount.toLocaleString(
-                        "fr-FR",
-                      )} FCFA de TVA)`
-                    })()}
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="notes" className="text-foreground">
-                  Notes
-                </Label>
-                <textarea
-                  id="notes"
-                  value={invoiceFormData.notes}
-                  onChange={(e) => handleInvoiceFormChange("notes", e.target.value)}
-                  className="w-full p-2 border border-border rounded-md bg-background text-foreground"
-                  rows={3}
-                />
-              </div>
-
-              <div className="flex space-x-2">
-                <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary/90">
-                  {editingInvoiceId ? "Modifier" : "Créer"} la Facture
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setShowAddInvoiceForm(false)
-                    resetInvoiceForm()
-                  }}
-                >
-                  Annuler
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
-      <Card className="bg-card border-border shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-card-foreground">Liste des Factures</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left p-2 text-foreground">N° Facture</th>
-                  <th className="text-left p-2 text-foreground">Client</th>
-                  <th className="text-left p-2 text-foreground">Date</th>
-                  <th className="text-left p-2 text-foreground">Montant</th>
-                  <th className="text-left p-2 text-foreground">Statut</th>
-                  <th className="text-left p-2 text-foreground">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoices.map((invoice) => (
-                  <tr key={invoice.id} className="border-b border-border hover:bg-muted/50">
-                    <td className="p-2 text-foreground font-medium">{invoice.invoice_number}</td>
-                    <td className="p-2 text-foreground">{invoice.client_name}</td>
-                    <td className="p-2 text-foreground">{new Date(invoice.invoice_date).toLocaleDateString("fr-FR")}</td>
-                    <td className="p-2 font-medium">{invoice.total_amount.toLocaleString("fr-FR")} FCFA</td>
-                    <td className="p-2">
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs ${
-                          invoice.status === "paid"
-                            ? "bg-green-100 text-green-800"
-                            : invoice.status === "sent"
-                              ? "bg-blue-100 text-blue-800"
-                              : invoice.status === "overdue"
-                                ? "bg-red-100 text-red-800"
-                                : "bg-gray-100 text-gray-800"
-                        }`}
-                      >
-                        {invoice.status === "paid"
-                          ? "Payée"
-                          : invoice.status === "sent"
-                            ? "Envoyée"
-                            : invoice.status === "overdue"
-                              ? "En retard"
-                              : "Brouillon"}
-                      </span>
-                    </td>
-                    <td className="p-2">
-                      <div className="flex space-x-2">
-                        <Button
-                          onClick={() => printInvoice(invoice)}
-                          variant="ghost"
-                          size="sm"
-                          className="text-blue-600 hover:text-blue-800"
-                          title="Imprimer la facture"
-                        >
-                          <Printer className="w-4 h-4" />
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-800">
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Êtes-vous sûr?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Voulez-vous vraiment supprimer la facture ?
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Annuler</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDeleteInvoice(invoice.id)}>
-                                Confirmer
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {invoices.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
-                Aucune facture trouvée. Créez votre première facture !
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  )
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <Smartphone className="w-12 h-12 text-primary mx-auto mb-4 animate-pulse" />
-          <p className="text-muted-foreground">Chargement...</p>
-        </div>
-      </div>
-    )
+    return <LoadingPage message="Chargement de vos données..." />
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <X className="w-12 h-12 text-destructive mx-auto mb-4" />
-          <p className="text-destructive mb-4">{error}</p>
-          <Button
-            onClick={() => {
-              setError(null)
-              // empty function to avoid error
-            }}
-          >
-            Réessayer
-          </Button>
-        </div>
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-md bg-card border-border shadow-lg">
+          <CardContent className="text-center p-6">
+            <X className="w-16 h-16 text-destructive mx-auto mb-4" />
+            <h2 className="text-xl font-semibold text-card-foreground mb-2">Erreur de chargement</h2>
+            <p className="text-muted-foreground mb-6">{error}</p>
+            <div className="space-y-3">
+              <Button
+                onClick={() => {
+                  setError(null)
+                  window.location.reload()
+                }}
+                className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                Réessayer
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => router.push("/auth")}
+                className="w-full border-border bg-transparent"
+              >
+                Retour à la connexion
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }
 
-  const DashboardView = () => (
-    <div className="space-y-6">
-      <div className="bg-primary rounded-xl p-6 text-white">
-        <h1 className="text-2xl font-bold mb-2 text-white">Tableau de Bord</h1>
-        <p className="text-white">Aperçu de vos performances de vente et gestion de stock</p>
-      </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-card border-border shadow-sm hover:shadow-md transition-shadow">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Ventes</p>
-                <p className="text-2xl font-bold text-card-foreground">{totalVentes}</p>
-              </div>
-              <div className="w-12 h-12 bg-chart-1/10 rounded-full flex items-center justify-center">
-                <ShoppingCart className="w-6 h-6 text-chart-1" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card className="bg-card border-border shadow-sm hover:shadow-md transition-shadow">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Chiffre d'Affaires</p>
-                <p className="text-2xl font-bold text-card-foreground">{totalRevenue.toLocaleString("fr-FR")} FCFA</p>
-              </div>
-              <div className="w-12 h-12 bg-chart-2/10 rounded-full flex items-center justify-center">
-                <DollarSign className="w-6 h-6 text-chart-2" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card className="bg-card border-border shadow-sm hover:shadow-md transition-shadow">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Stock Total</p>
-                <p className="text-2xl font-bold text-card-foreground">{totalStock}</p>
-              </div>
-              <div className="w-12 h-12 bg-chart-3/10 rounded-full flex items-center justify-center">
-                <Package className="w-6 h-6 text-chart-3" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-card border-border shadow-sm hover:shadow-md transition-shadow">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Stock Faible</p>
-                <p className="text-2xl font-bold text-card-foreground">{lowStockProducts}</p>
-              </div>
-              <div className="w-12 h-12 bg-destructive/10 rounded-full flex items-center justify-center">
-                <AlertTriangle className="w-6 h-6 text-destructive" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Sales */}
-        <Card className="bg-card border-border shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-card-foreground flex items-center gap-2">
-              <BarChart3 className="w-5 h-5" />
-              Ventes Récentes
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {ventes.slice(0, 5).map((vente) => (
-                <div key={vente.id} className="flex items-center justify-between p-3 bg-muted/20 rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                      <Smartphone className="w-5 h-5 text-primary" />
-                    </div>
-                    <div>
-                    </div>
-                    <div>
-                      <p className="font-medium text-card-foreground">{vente.nom_prenom_client}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {vente.marque} {vente.modele}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-primary">{vente.prix.toLocaleString("fr-FR")} FCFA</p>
-                    <p className="text-xs text-muted-foreground">
-                      {vente.created_at ? new Date(vente.created_at).toLocaleDateString("fr-FR") : ""}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Stock Alerts */}
-        <Card className="bg-card border-border shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-card-foreground flex items-center gap-2">
-              <Package className="w-5 h-5" />
-              Alertes Stock
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {products
-                .filter((product) => product.quantite_stock <= 5)
-                .slice(0, 5)
-                .map((product) => (
-                  <div key={product.id} className="flex items-center justify-between p-3 bg-muted/20 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                          product.quantite_stock === 0 ? "bg-destructive/10" : "bg-orange-500/10"
-                        }`}
-                      >
-                        {product.quantite_stock === 0 ? (
-                          <AlertTriangle className="w-5 h-5 text-destructive" />
-                        ) : (
-                          <Package className="w-5 h-5 text-orange-500" />
-                        )}
-                      </div>
-                      <div>
-                        <p className="font-medium text-card-foreground">{product.nom_produit}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {product.marque} {product.modele}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p
-                        className={`font-semibold ${
-                          product.quantite_stock === 0 ? "text-destructive" : "text-orange-500"
-                        }`}
-                      >
-                        {product.quantite_stock === 0 ? "Rupture" : `${product.quantite_stock} restant`}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              {products.filter((product) => product.quantite_stock <= 5).length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>Aucune alerte de stock</p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  )
-
-  const StockView = () => (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h1 className="text-3xl font-bold text-foreground">Gestion de Stock</h1>
-        <Button
-          onClick={() => setShowAddProductForm(true)}
-          className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-md"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Nouveau Produit
-        </Button>
-      </div>
-
-      {(showAddProductForm || editingProductId) && (
-        <Card className="bg-card border-border shadow-md">
-          <CardHeader>
-            <CardTitle className="text-card-foreground">
-              {editingProductId ? "Modifier le Produit" : "Ajouter un Nouveau Produit"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="nomProduit" className="text-card-foreground">
-                  Nom du Produit
-                </Label>
-                <Input
-                  id="nomProduit"
-                  value={productFormData.nom_produit}
-                  onChange={(e) => setProductFormData({ ...productFormData, nom_produit: e.target.value })}
-                  placeholder="Ex: iPhone 15 Pro Max"
-                  className="bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-              <div>
-                <Label htmlFor="marque" className="text-card-foreground">
-                  Marque
-                </Label>
-                <Input
-                  id="marque"
-                  value={productFormData.marque}
-                  onChange={(e) => setProductFormData({ ...productFormData, marque: e.target.value })}
-                  placeholder="Ex: Apple"
-                  className="bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-              <div>
-                <Label htmlFor="modele" className="text-card-foreground">
-                  Modèle
-                </Label>
-                <Input
-                  id="modele"
-                  value={productFormData.modele}
-                  onChange={(e) => setProductFormData({ ...productFormData, modele: e.target.value })}
-                  placeholder="Ex: 15 Pro Max"
-                  className="bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-              <div>
-                <Label htmlFor="prixUnitaire" className="text-card-foreground">
-                  Prix Unitaire (FCFA)
-                </Label>
-                <Input
-                  id="prixUnitaire"
-                  type="number"
-                  value={productFormData.prix_unitaire}
-                  onChange={(e) => setProductFormData({ ...productFormData, prix_unitaire: e.target.value })}
-                  placeholder="Ex: 1299000"
-                  className="bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-              <div>
-                <Label htmlFor="quantiteStock" className="text-card-foreground">
-                  Quantité en Stock
-                </Label>
-                <Input
-                  id="quantiteStock"
-                  type="number"
-                  value={productFormData.quantite_stock}
-                  onChange={(e) => setProductFormData({ ...productFormData, quantite_stock: e.target.value })}
-                  placeholder="Ex: 10"
-                  className="bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-              <div>
-                <Label htmlFor="imeiTelephone" className="text-card-foreground">
-                  IMEI (optionnel)
-                </Label>
-                <Input
-                  id="imeiTelephone"
-                  value={productFormData.imei_telephone}
-                  onChange={(e) => setProductFormData({ ...productFormData, imei_telephone: e.target.value })}
-                  placeholder="Ex: 123456789012345"
-                  className="bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-              <div>
-                <Label htmlFor="provenance" className="text-card-foreground">
-                  Provenance
-                </Label>
-                <Input
-                  id="provenance"
-                  value={productFormData.provenance}
-                  onChange={(e) => setProductFormData({ ...productFormData, provenance: e.target.value })}
-                  placeholder="Ex: Chine"
-                  className="bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <Label htmlFor="description" className="text-card-foreground">
-                  Description (optionnel)
-                </Label>
-                <Textarea
-                  id="description"
-                  value={productFormData.description}
-                  onChange={(e) => setProductFormData({ ...productFormData, description: e.target.value })}
-                  placeholder="Description du produit..."
-                  className="bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                  rows={3}
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <Label htmlFor="photo" className="text-card-foreground">
-                  Photo du Produit
-                </Label>
-                <div className="mt-2 space-y-4">
-                  <div className="flex items-center gap-4">
-                    <Input
-                      id="photo"
-                      type="file"
-                      accept="image/*"
-                      onChange={handlePhotoUpload}
-                      className="bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => document.getElementById("photo")?.click()}
-                      className="border-border bg-transparent hover:bg-primary/10"
-                    >
-                      <Upload className="w-4 h-4 mr-2" />
-                      Choisir
-                    </Button>
-                  </div>
-                  {productPhotoPreview && (
-                    <div className="relative w-32 h-32 border-2 border-dashed border-border rounded-lg overflow-hidden">
-                      <img
-                        src={productPhotoPreview || "/placeholder.svg"}
-                        alt="Aperçu"
-                        className="w-full h-full object-cover"
-                      />
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => {
-                          setProductPhoto(null)
-                          setProductPhotoPreview(null)
-                        }}
-                        className="absolute top-1 right-1"
-                      >
-                        <X className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="flex space-x-2 pt-4">
-              <Button
-                onClick={editingProductId ? handleSaveProductEdit : handleAddProduct}
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                <Save className="w-4 h-4 mr-2" />
-                {editingProductId ? "Sauvegarder" : "Ajouter"}
-              </Button>
-              <Button variant="outline" onClick={handleCancelProductEdit} className="border-border bg-transparent">
-                <X className="w-4 h-4 mr-2" />
-                Annuler
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-        <Input
-          placeholder="Rechercher par nom, modèle ou marque..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10 bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-        />
-      </div>
-
-      {/* Products List */}
-      <div className="grid gap-4">
-        {filteredProducts.map((product) => (
-          <Card key={product.id} className="bg-card border-border shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between">
-                <div className="flex items-start space-x-3 flex-1">
-                  <div className="w-16 h-16 bg-primary/10 rounded-lg flex items-center justify-center overflow-hidden">
-                    {product.photo_url ? (
-                      <img
-                        src={product.photo_url || "/placeholder.svg"}
-                        alt={product.nom_produit}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <Package className="w-8 h-8 text-primary" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-card-foreground mb-1">{product.nom_produit}</h3>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      {product.marque} {product.modele}
-                    </p>
-                    <p className="text-lg font-bold text-primary mb-2">
-                      {product.prix_unitaire.toLocaleString("fr-FR")} FCFA
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-muted-foreground">
-                      <span className="flex items-center">
-                        <Package className="w-3 h-3 mr-1" />
-                        Stock: {product.quantite_stock}
-                      </span>
-                      {product.provenance && (
-                        <span className="flex items-center">
-                          <Package className="w-3 h-3 mr-1" />
-                          Provenance: {product.provenance}
-                        </span>
-                      )}
-                      {product.imei_telephone && (
-                        <span className="text-xs col-span-full">IMEI: {product.imei_telephone}</span>
-                      )}
-                      {product.description && <span className="text-xs col-span-full">{product.description}</span>}
-                    </div>
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleEditProduct(product.id)}
-                  className="hover:bg-primary/10"
-                >
-                  <Edit className="w-4 h-4" />
-                </Button>
-                <Button variant="destructive" size="sm" onClick={() => handleDeleteProduct(product.id)}>
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Supprimer
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {filteredProducts.length === 0 && (
-        <div className="text-center py-12">
-          <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <p className="text-muted-foreground">Aucun produit trouvé</p>
-        </div>
-      )}
-    </div>
-  )
-
-  const VentesView = () => (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h1 className="text-3xl font-bold text-foreground">Gestion de Vente</h1>
-        <Button
-          onClick={() => setShowAddForm(true)}
-          className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-md"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Nouvelle Vente
-        </Button>
-      </div>
-
-      {(showAddForm || editingId) && (
-        <Card className="bg-card border-border shadow-md">
-          <CardHeader>
-            <CardTitle className="text-card-foreground">
-              {editingId ? "Modifier la Vente" : "Ajouter une Nouvelle Vente"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="nomPrenom" className="text-card-foreground">
-                  Nom et Prénom Client
-                </Label>
-                <Input
-                  id="nomPrenom"
-                  value={formData.nom_prenom_client}
-                  onChange={(e) => setFormData({ ...formData, nom_prenom_client: e.target.value })}
-                  placeholder="Ex: Marie Dubois"
-                  className="bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-              <div>
-                <Label htmlFor="numeroTelephone" className="text-card-foreground">
-                  Numéro Téléphone
-                </Label>
-                <Input
-                  id="numeroTelephone"
-                  value={formData.numero_telephone}
-                  onChange={(e) => setFormData({ ...formData, numero_telephone: e.target.value })}
-                  placeholder="Ex: +33 6 12 34 56 78"
-                  className="bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-              <div>
-                <Label htmlFor="dateVente" className="text-card-foreground">
-                  Date de Vente
-                </Label>
-                <Input
-                  id="dateVente"
-                  type="date"
-                  value={formData.date_vente}
-                  onChange={(e) => setFormData({ ...formData, date_vente: e.target.value })}
-                  className="bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-              <div>
-                <Label htmlFor="modele" className="text-card-foreground">
-                  Modèle
-                </Label>
-                <Input
-                  id="modele"
-                  value={formData.modele}
-                  onChange={(e) => setFormData({ ...formData, modele: e.target.value })}
-                  placeholder="Ex: iPhone 15 Pro"
-                  className="bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-              <div>
-                <Label htmlFor="marque" className="text-card-foreground">
-                  Marque
-                </Label>
-                <Input
-                  id="marque"
-                  value={formData.marque}
-                  onChange={(e) => setFormData({ ...formData, marque: e.target.value })}
-                  placeholder="Ex: Apple"
-                  className="bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-              <div>
-                <Label htmlFor="prix" className="text-card-foreground">
-                  Prix (FCFA)
-                </Label>
-                <Input
-                  id="prix"
-                  type="number"
-                  value={formData.prix}
-                  onChange={(e) => setFormData({ ...formData, prix: e.target.value })}
-                  placeholder="Ex: 1299000"
-                  className="bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <Label htmlFor="imei" className="text-card-foreground">
-                  IMEI Téléphone
-                </Label>
-                <Input
-                  id="imei"
-                  value={formData.imei_telephone}
-                  onChange={(e) => setFormData({ ...formData, imei_telephone: e.target.value })}
-                  placeholder="Ex: 123456789012345"
-                  className="bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-            </div>
-            <div className="flex space-x-2 pt-4">
-              <Button
-                onClick={editingId ? handleSaveEdit : handleAddVente}
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                <Save className="w-4 h-4 mr-2" />
-                {editingId ? "Sauvegarder" : "Ajouter"}
-              </Button>
-              <Button variant="outline" onClick={handleCancelEdit} className="border-border bg-transparent">
-                <X className="w-4 h-4 mr-2" />
-                Annuler
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-        <Input
-          placeholder="Rechercher par nom, modèle ou marque..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10 bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-        />
-      </div>
-
-      {/* Sales List */}
-      <div className="grid gap-4">
-        {filteredVentes.map((vente) => (
-          <Card key={vente.id} className="bg-card border-border shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between">
-                <div className="flex items-start space-x-3 flex-1">
-                  <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-                    <Smartphone className="w-6 h-6 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-card-foreground mb-1">{vente.nom_prenom_client}</h3>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      {vente.marque} {vente.modele}
-                    </p>
-                    <p className="text-lg font-bold text-primary mb-2">{vente.prix.toLocaleString("fr-FR")} FCFA</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-muted-foreground">
-                      <span className="flex items-center">
-                        <Phone className="w-3 h-3 mr-1" />
-                        {vente.numero_telephone}
-                      </span>
-                      <span className="flex items-center">
-                        <Calendar className="w-3 h-3 mr-1" />
-                        {new Date(vente.date_vente).toLocaleDateString("fr-FR")}
-                      </span>
-                      <span className="text-xs col-span-full">IMEI: {vente.imei_telephone}</span>
-                    </div>
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleEditVente(vente.id)}
-                  className="hover:bg-primary/10"
-                >
-                  <Edit className="w-4 h-4" />
-                </Button>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="destructive" size="sm">
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Supprimer
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Êtes-vous sûr?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Voulez-vous vraiment supprimer la vente?
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Annuler</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => handleDeleteSale(vente.id)}>
-                        Supprimer
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {filteredVentes.length === 0 && (
-        <div className="text-center py-12">
-          <Smartphone className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <p className="text-muted-foreground">Aucune vente trouvée</p>
-        </div>
-      )}
-    </div>
-  )
-
-  const SettingsView = () => (
-    <div className="space-y-6">
-      <div className="bg-primary rounded-xl p-6 text-white">
-        <h1 className="text-2xl font-bold mb-2 text-white">Paramètres</h1>
-        <p className="text-white">Configuration de l'entreprise et de l'administrateur</p>
-      </div>
-
-      <Card className="bg-card border-border shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-card-foreground flex items-center gap-2">
-            <Building className="w-5 h-5" />
-            Informations de l'Entreprise
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {!isEditingSettings ? (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-muted/20 rounded-lg">
-                <div>
-                  <p className="font-medium text-card-foreground">Nom de l'Entreprise</p>
-                  <p className="text-muted-foreground">{companySettings.companyName}</p>
-                </div>
-                <Building className="w-5 h-5 text-primary" />
-              </div>
-              <div className="flex items-center justify-between p-4 bg-muted/20 rounded-lg">
-                <div>
-                  <p className="font-medium text-card-foreground">Nom de l'Administrateur</p>
-                  <p className="text-muted-foreground">{companySettings.adminName}</p>
-                </div>
-                <User className="w-5 h-5 text-primary" />
-              </div>
-              <Button
-                onClick={() => {
-                  setTempSettings(companySettings)
-                  setIsEditingSettings(true)
-                }}
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                <Edit className="w-4 h-4 mr-2" />
-                Modifier
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="companyName" className="text-card-foreground">
-                  Nom de l'Entreprise
-                </Label>
-                <Input
-                  id="companyName"
-                  value={tempSettings.companyName}
-                  onChange={(e) => setTempSettings({ ...tempSettings, companyName: e.target.value })}
-                  placeholder="Ex: Mon Entreprise"
-                  className="bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-              <div>
-                <Label htmlFor="adminName" className="text-card-foreground">
-                  Nom de l'Administrateur
-                </Label>
-                <Input
-                  id="adminName"
-                  value={tempSettings.adminName}
-                  onChange={(e) => setTempSettings({ ...tempSettings, adminName: e.target.value })}
-                  placeholder="Ex: Jean Dupont"
-                  className="bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
-              <div className="flex space-x-2 pt-4">
-                <Button onClick={handleSaveSettings} className="bg-primary text-primary-foreground hover:bg-primary/90">
-                  <Save className="w-4 h-4 mr-2" />
-                  Sauvegarder
-                </Button>
-                <Button variant="outline" onClick={handleCancelSettings} className="border-border bg-transparent">
-                  <X className="w-4 h-4 mr-2" />
-                  Annuler
-                </Button>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  )
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -2086,85 +1312,219 @@ export default function SalesManagementApp() {
         subMessage={successModal.subMessage}
       />
 
-      <div className="bg-card border-b border-border shadow-sm">
+      <header className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-b border-border/50 shadow-lg backdrop-blur-sm">
         <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 space-y-4 sm:space-y-0">
-            <div className="flex items-center space-x-3">
-              <div className="bg-primary p-2 rounded-lg">
-                <Smartphone className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <h1 className="text-xl font-bold text-foreground">{companySettings.companyName}</h1>
-            </div>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-6 space-y-4 sm:space-y-0">
             <div className="flex items-center space-x-4">
+              {companySettings.logoUrl ? (
+                <div className="relative">
+                  <img
+                    src={companySettings.logoUrl || "/placeholder.svg"}
+                    alt={`Logo de ${companySettings.companyName}`}
+                    className="w-12 h-12 rounded-xl object-cover shadow-md ring-2 ring-primary/20"
+                  />
+                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white" aria-label="Connecté"></div>
+                </div>
+              ) : (
+                <div className="bg-gradient-to-br from-primary to-primary/80 p-3 rounded-xl shadow-lg" aria-label="Logo par défaut">
+                  <Smartphone className="w-6 h-6 text-white" aria-hidden="true" />
+                </div>
+              )}
+              <div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+                  {companySettings.companyName}
+                </h1>
+                {user && (
+                  <p className="text-sm text-muted-foreground flex items-center gap-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full" aria-label="Statut en ligne"></div>
+                    Connecté en tant que {user.email}
+                  </p>
+                )}
+              </div>
+            </div>
+            <nav className="flex items-center space-x-4" role="navigation" aria-label="Navigation principale">
               <div className="hidden sm:flex items-center space-x-2 text-sm text-muted-foreground">
-                <User className="w-4 h-4" />
+                <User className="w-4 h-4" aria-hidden="true" />
                 <span>{companySettings.adminName}</span>
               </div>
-              <div className="flex space-x-1">
+              <div className="flex space-x-2" role="tablist" aria-label="Onglets de navigation">
                 <Button
                   variant={activeTab === "dashboard" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setActiveTab("dashboard")}
-                  className={activeTab === "dashboard" ? "bg-primary text-primary-foreground" : ""}
+                  className={`transition-all duration-200 hover:scale-105 ${
+                    activeTab === "dashboard"
+                      ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-lg ring-2 ring-primary/20"
+                      : "hover:bg-primary/10 hover:text-primary"
+                  }`}
+                  aria-selected={activeTab === "dashboard"}
+                  role="tab"
+                  aria-controls="dashboard-panel"
+                  id="dashboard-tab"
                 >
-                  <BarChart3 className="w-4 h-4 mr-2" />
+                  <BarChart3 className="w-4 h-4 mr-2" aria-hidden="true" />
                   Dashboard
                 </Button>
                 <Button
                   variant={activeTab === "ventes" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setActiveTab("ventes")}
-                  className={activeTab === "ventes" ? "bg-primary text-primary-foreground" : ""}
+                  className={`transition-all duration-200 hover:scale-105 ${
+                    activeTab === "ventes"
+                      ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-lg ring-2 ring-primary/20"
+                      : "hover:bg-primary/10 hover:text-primary"
+                  }`}
+                  aria-selected={activeTab === "ventes"}
+                  role="tab"
+                  aria-controls="ventes-panel"
+                  id="ventes-tab"
                 >
-                  <ShoppingCart className="w-4 h-4 mr-2" />
+                  <ShoppingCart className="w-4 h-4 mr-2" aria-hidden="true" />
                   Ventes
                 </Button>
                 <Button
                   variant={activeTab === "stock" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setActiveTab("stock")}
-                  className={activeTab === "stock" ? "bg-primary text-primary-foreground" : ""}
+                  className={`transition-all duration-200 hover:scale-105 ${
+                    activeTab === "stock"
+                      ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-lg ring-2 ring-primary/20"
+                      : "hover:bg-primary/10 hover:text-primary"
+                  }`}
+                  aria-selected={activeTab === "stock"}
+                  role="tab"
+                  aria-controls="stock-panel"
+                  id="stock-tab"
                 >
-                  <Package className="w-4 h-4 mr-2" />
+                  <Package className="w-4 h-4 mr-2" aria-hidden="true" />
                   Stock
                 </Button>
                 <Button
                   variant={activeTab === "factures" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setActiveTab("factures")}
-                  className={activeTab === "factures" ? "bg-primary text-primary-foreground" : ""}
+                  className={`transition-all duration-200 hover:scale-105 ${
+                    activeTab === "factures"
+                      ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-lg ring-2 ring-primary/20"
+                      : "hover:bg-primary/10 hover:text-primary"
+                  }`}
+                  aria-selected={activeTab === "factures"}
+                  role="tab"
+                  aria-controls="factures-panel"
+                  id="factures-tab"
                 >
-                  <FileText className="w-4 h-4 mr-2" />
+                  <FileText className="w-4 h-4 mr-2" aria-hidden="true" />
                   Factures
                 </Button>
                 <Button
                   variant={activeTab === "settings" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setActiveTab("settings")}
-                  className={activeTab === "settings" ? "bg-primary text-primary-foreground" : ""}
+                  className={`transition-all duration-200 hover:scale-105 ${
+                    activeTab === "settings"
+                      ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-lg ring-2 ring-primary/20"
+                      : "hover:bg-primary/10 hover:text-primary"
+                  }`}
+                  aria-selected={activeTab === "settings"}
+                  role="tab"
+                  aria-controls="settings-panel"
+                  id="settings-tab"
                 >
-                  <Settings className="w-4 h-4 mr-2" />
+                  <Settings className="w-4 h-4 mr-2" aria-hidden="true" />
                   Paramètres
                 </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleLogout}
+                  className="hover:bg-red-100 hover:text-red-600 transition-colors"
+                  aria-label="Se déconnecter"
+                >
+                  Se déconnecter
+                </Button>
               </div>
-            </div>
+            </nav>
           </div>
         </div>
-      </div>
+      </header>
 
-      <div className="max-w-6xl mx-auto p-4">
+      <main className="max-w-6xl mx-auto p-4" role="main">
         {activeTab === "dashboard" ? (
-          <DashboardView />
+          <div role="tabpanel" id="dashboard-panel" aria-labelledby="dashboard-tab">
+            <DashboardView
+              totalVentes={totalVentes}
+              totalRevenue={totalRevenue}
+              totalStock={totalStock}
+              lowStockProducts={lowStockProducts}
+              ventes={ventes}
+              products={products}
+              companySettings={companySettings}
+            />
+          </div>
         ) : activeTab === "ventes" ? (
-          <VentesView />
+          <div role="tabpanel" id="ventes-panel" aria-labelledby="ventes-tab">
+            <SalesView
+              ventes={ventes}
+              filteredVentes={filteredVentes}
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              showAddForm={showAddForm}
+              setShowAddForm={setShowAddForm}
+              editingId={editingId}
+              formData={formData}
+              setFormData={setFormData}
+              handleAddVente={handleAddVente}
+              handleEditVente={handleEditVente}
+              handleSaveEdit={handleSaveEdit}
+              handleCancelEdit={handleCancelEdit}
+              handleDeleteSale={handleDeleteSale}
+            />
+          </div>
         ) : activeTab === "stock" ? (
-          <StockView />
+          <div role="tabpanel" id="stock-panel" aria-labelledby="stock-tab">
+            <StockView
+              products={products}
+              setProducts={setProducts}
+              user={user}
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+            />
+          </div>
         ) : activeTab === "factures" ? ( // Adding factures tab condition
-          <InvoicesView />
+          <div role="tabpanel" id="factures-panel" aria-labelledby="factures-tab">
+            <InvoicesView
+              invoices={invoices}
+              showAddInvoiceForm={showAddInvoiceForm}
+              setShowAddInvoiceForm={setShowAddInvoiceForm}
+              editingInvoiceId={editingInvoiceId}
+              invoiceFormData={invoiceFormData}
+              handleInvoiceFormChange={handleInvoiceFormChange}
+              invoiceItems={invoiceItems}
+              handleInvoiceItemChange={handleInvoiceItemChange}
+              addInvoiceItem={addInvoiceItem}
+              removeInvoiceItem={removeInvoiceItem}
+              handleAddInvoice={handleAddInvoice}
+              resetInvoiceForm={resetInvoiceForm}
+              printInvoice={printInvoice}
+              handleDeleteInvoice={handleDeleteInvoice}
+            />
+          </div>
         ) : (
-          <SettingsView />
+          <div role="tabpanel" id="settings-panel" aria-labelledby="settings-tab">
+            <SettingsView
+              companySettings={companySettings}
+              isEditingSettings={isEditingSettings}
+              setIsEditingSettings={setIsEditingSettings}
+              tempSettings={tempSettings}
+              setTempSettings={setTempSettings}
+              logoPreview={logoPreview}
+              handleLogoUpload={handleLogoUpload}
+              handleSaveSettings={handleSaveSettings}
+              handleCancelSettings={handleCancelSettings}
+            />
+          </div>
         )}
-      </div>
+      </main>
     </div>
   )
 }
