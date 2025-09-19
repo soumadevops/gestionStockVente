@@ -45,6 +45,8 @@ import {
   AlertTriangle,
   FileText,
   Printer,
+  Menu,
+  X as CloseIcon,
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
@@ -235,6 +237,7 @@ export default function SalesManagementApp() {
     message: "",
     subMessage: "",
   })
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   const supabase = createClient()
 
@@ -1279,30 +1282,30 @@ export default function SalesManagementApp() {
 
       <header className="bg-gradient-to-r from-indigo-600/10 via-purple-600/5 to-pink-600/10 border-b border-slate-200/50 dark:border-slate-700/50 shadow-xl backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-6 space-y-4 sm:space-y-0">
-            <div className="flex items-center space-x-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 sm:p-6 space-y-4 sm:space-y-0">
+            <div className="flex items-center space-x-3 sm:space-x-4 min-w-0 flex-1">
               {companySettings.logoUrl ? (
-                <div className="relative">
+                <div className="relative flex-shrink-0">
                   <img
                     src={companySettings.logoUrl || "/placeholder.svg"}
                     alt={`Logo de ${companySettings.companyName}`}
-                    className="w-12 h-12 rounded-xl object-cover shadow-md ring-2 ring-primary/20"
+                    className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl object-cover shadow-md ring-2 ring-primary/20"
                   />
-                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white" aria-label="Connecté"></div>
+                  <div className="absolute -bottom-1 -right-1 w-3 h-3 sm:w-4 sm:h-4 bg-green-500 rounded-full border-2 border-white" aria-label="Connecté"></div>
                 </div>
               ) : (
-                <div className="bg-gradient-to-br from-primary to-primary/80 p-3 rounded-xl shadow-lg" aria-label="Logo par défaut">
-                  <Smartphone className="w-6 h-6 text-white" aria-hidden="true" />
+                <div className="bg-gradient-to-br from-primary to-primary/80 p-2 sm:p-3 rounded-xl shadow-lg flex-shrink-0" aria-label="Logo par défaut">
+                  <Smartphone className="w-5 h-5 sm:w-6 sm:h-6 text-white" aria-hidden="true" />
                 </div>
               )}
-              <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+              <div className="min-w-0 flex-1">
+                <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent truncate">
                   {companySettings.companyName}
                 </h1>
                 {user && (
-                  <p className="text-sm text-muted-foreground flex items-center gap-2">
-                    <div className="w-2 h-2 bg-green-500 rounded-full" aria-label="Statut en ligne"></div>
-                    Connecté en tant que {user.email}
+                  <p className="text-xs sm:text-sm text-muted-foreground flex items-center gap-2 truncate">
+                    <div className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0" aria-label="Statut en ligne"></div>
+                    <span className="truncate">Connecté en tant que {user.email}</span>
                   </p>
                 )}
               </div>
@@ -1312,7 +1315,9 @@ export default function SalesManagementApp() {
                 <User className="w-4 h-4" aria-hidden="true" />
                 <span>{companySettings.adminName}</span>
               </div>
-              <div className="flex space-x-2" role="tablist" aria-label="Onglets de navigation">
+
+              {/* Desktop Navigation */}
+              <div className="hidden md:flex space-x-2" role="tablist" aria-label="Onglets de navigation">
                 <Button
                   variant={activeTab === "dashboard" ? "default" : "ghost"}
                   size="sm"
@@ -1408,12 +1413,154 @@ export default function SalesManagementApp() {
                   Se déconnecter
                 </Button>
               </div>
+
+              {/* Mobile Menu Button */}
+              <div className="md:hidden">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                  className="p-2"
+                  aria-label="Menu mobile"
+                >
+                  {isMobileMenuOpen ? (
+                    <CloseIcon className="w-5 h-5" />
+                  ) : (
+                    <Menu className="w-5 h-5" />
+                  )}
+                </Button>
+              </div>
             </nav>
+
+            {/* Mobile Navigation Menu */}
+            {isMobileMenuOpen && (
+              <div className="md:hidden absolute top-full left-0 right-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shadow-lg z-50">
+                <div className="px-4 py-6 space-y-4">
+                  {/* Mobile Admin Info */}
+                  <div className="flex items-center space-x-2 text-sm text-muted-foreground pb-4 border-b border-slate-200 dark:border-slate-700">
+                    <User className="w-4 h-4" aria-hidden="true" />
+                    <span>{companySettings.adminName}</span>
+                  </div>
+
+                  {/* Mobile Navigation Buttons */}
+                  <div className="grid grid-cols-2 gap-3" role="tablist" aria-label="Navigation mobile">
+                    <Button
+                      variant={activeTab === "dashboard" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => {
+                        setActiveTab("dashboard")
+                        setIsMobileMenuOpen(false)
+                      }}
+                      className={`flex flex-col items-center justify-center h-16 space-y-1 ${
+                        activeTab === "dashboard"
+                          ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white"
+                          : "hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
+                      }`}
+                      aria-selected={activeTab === "dashboard"}
+                      role="tab"
+                    >
+                      <BarChart3 className="w-5 h-5" />
+                      <span className="text-xs">Dashboard</span>
+                    </Button>
+
+                    <Button
+                      variant={activeTab === "ventes" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => {
+                        setActiveTab("ventes")
+                        setIsMobileMenuOpen(false)
+                      }}
+                      className={`flex flex-col items-center justify-center h-16 space-y-1 ${
+                        activeTab === "ventes"
+                          ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white"
+                          : "hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                      }`}
+                      aria-selected={activeTab === "ventes"}
+                      role="tab"
+                    >
+                      <ShoppingCart className="w-5 h-5" />
+                      <span className="text-xs">Ventes</span>
+                    </Button>
+
+                    <Button
+                      variant={activeTab === "stock" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => {
+                        setActiveTab("stock")
+                        setIsMobileMenuOpen(false)
+                      }}
+                      className={`flex flex-col items-center justify-center h-16 space-y-1 ${
+                        activeTab === "stock"
+                          ? "bg-gradient-to-r from-amber-600 to-orange-600 text-white"
+                          : "hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                      }`}
+                      aria-selected={activeTab === "stock"}
+                      role="tab"
+                    >
+                      <Package className="w-5 h-5" />
+                      <span className="text-xs">Stock</span>
+                    </Button>
+
+                    <Button
+                      variant={activeTab === "factures" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => {
+                        setActiveTab("factures")
+                        setIsMobileMenuOpen(false)
+                      }}
+                      className={`flex flex-col items-center justify-center h-16 space-y-1 ${
+                        activeTab === "factures"
+                          ? "bg-gradient-to-r from-rose-600 to-pink-600 text-white"
+                          : "hover:bg-rose-50 dark:hover:bg-rose-900/20"
+                      }`}
+                      aria-selected={activeTab === "factures"}
+                      role="tab"
+                    >
+                      <FileText className="w-5 h-5" />
+                      <span className="text-xs">Factures</span>
+                    </Button>
+
+                    <Button
+                      variant={activeTab === "settings" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => {
+                        setActiveTab("settings")
+                        setIsMobileMenuOpen(false)
+                      }}
+                      className={`flex flex-col items-center justify-center h-16 space-y-1 ${
+                        activeTab === "settings"
+                          ? "bg-gradient-to-r from-slate-600 to-gray-600 text-white"
+                          : "hover:bg-slate-50 dark:hover:bg-slate-900/20"
+                      }`}
+                      aria-selected={activeTab === "settings"}
+                      role="tab"
+                    >
+                      <Settings className="w-5 h-5" />
+                      <span className="text-xs">Paramètres</span>
+                    </Button>
+
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        handleLogout()
+                        setIsMobileMenuOpen(false)
+                      }}
+                      className="flex flex-col items-center justify-center h-16 space-y-1 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600"
+                      aria-label="Se déconnecter"
+                    >
+                      <CloseIcon className="w-5 h-5" />
+                      <span className="text-xs">Déconnexion</span>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-6" role="main">
+      <main className="max-w-7xl mx-auto p-4 sm:p-6" role="main">
         {activeTab === "dashboard" ? (
           <div role="tabpanel" id="dashboard-panel" aria-labelledby="dashboard-tab">
             <DashboardView

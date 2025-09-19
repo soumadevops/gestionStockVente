@@ -69,61 +69,61 @@ export const DashboardView = React.memo(function DashboardView({
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200/50 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group">
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between">
-              <div>
+              <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-blue-600/70 group-hover:text-blue-700">Total Ventes</p>
-                <p className="text-3xl font-bold text-blue-900 mt-1">{totalVentes}</p>
+                <p className="text-2xl sm:text-3xl font-bold text-blue-900 mt-1">{totalVentes}</p>
               </div>
-              <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform">
-                <ShoppingCart className="w-7 h-7 text-white" />
+              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform ml-3">
+                <ShoppingCart className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
               </div>
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-br from-green-50 to-green-100/50 border-green-200/50 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group">
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between">
-              <div>
+              <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-green-600/70 group-hover:text-green-700">Chiffre d'Affaires</p>
-                <p className="text-3xl font-bold text-green-900 mt-1">{totalRevenue.toLocaleString("fr-FR")}</p>
+                <p className="text-2xl sm:text-3xl font-bold text-green-900 mt-1">{totalRevenue.toLocaleString("fr-FR")}</p>
                 <p className="text-xs text-green-600/60 font-medium">FCFA</p>
               </div>
-              <div className="w-14 h-14 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform">
-                <DollarSign className="w-7 h-7 text-white" />
+              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform ml-3">
+                <DollarSign className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
               </div>
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-br from-purple-50 to-purple-100/50 border-purple-200/50 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group">
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between">
-              <div>
+              <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-purple-600/70 group-hover:text-purple-700">Stock Total</p>
-                <p className="text-3xl font-bold text-purple-900 mt-1">{totalStock}</p>
+                <p className="text-2xl sm:text-3xl font-bold text-purple-900 mt-1">{totalStock}</p>
                 <p className="text-xs text-purple-600/60 font-medium">articles</p>
               </div>
-              <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform">
-                <Package className="w-7 h-7 text-white" />
+              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform ml-3">
+                <Package className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
               </div>
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-br from-orange-50 to-orange-100/50 border-orange-200/50 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group">
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between">
-              <div>
+              <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-orange-600/70 group-hover:text-orange-700">Stock Faible</p>
-                <p className="text-3xl font-bold text-orange-900 mt-1">{lowStockProducts}</p>
+                <p className="text-2xl sm:text-3xl font-bold text-orange-900 mt-1">{lowStockProducts}</p>
                 <p className="text-xs text-orange-600/60 font-medium">à réapprovisionner</p>
               </div>
-              <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform">
-                <AlertTriangle className="w-7 h-7 text-white" />
+              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform ml-3">
+                <AlertTriangle className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
               </div>
             </div>
           </CardContent>

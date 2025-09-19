@@ -504,8 +504,8 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
             </p>
           </div>
 
-          <CardContent className="p-8">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <CardContent className="p-4 sm:p-6 lg:p-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
               {/* Left Column - Basic Info */}
               <div className="space-y-6">
                 <div className="space-y-4">
@@ -524,7 +524,7 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
                         value={productFormData.nom_produit}
                         onChange={(e) => setProductFormData({ ...productFormData, nom_produit: e.target.value })}
                         placeholder="Ex: iPhone 15 Pro Max"
-                        className="mt-2 h-12 bg-white border-gray-300 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                        className="mt-2 h-10 sm:h-12 bg-white border-gray-300 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-base"
                       />
                     </div>
 
@@ -537,7 +537,7 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
                           value={productFormData.marque}
                           onValueChange={(value) => setProductFormData({ ...productFormData, marque: value })}
                         >
-                          <SelectTrigger className="mt-2 h-12 bg-white border-gray-300 focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                          <SelectTrigger className="mt-2 h-10 sm:h-12 bg-white border-gray-300 focus:ring-2 focus:ring-primary/20 focus:border-primary">
                             <SelectValue placeholder="Sélectionnez une marque" />
                           </SelectTrigger>
                           <SelectContent>
@@ -559,7 +559,7 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
                           value={productFormData.modele}
                           onChange={(e) => setProductFormData({ ...productFormData, modele: e.target.value })}
                           placeholder="Ex: 15 Pro Max"
-                          className="mt-2 h-12 bg-white border-gray-300 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                          className="mt-2 h-10 sm:h-12 bg-white border-gray-300 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-base"
                         />
                       </div>
                     </div>
@@ -573,7 +573,7 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
                     Stock et Prix
                   </h3>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="prixUnitaire" className="text-gray-700 font-medium">
                         Prix Unitaire (FCFA) *
@@ -584,7 +584,7 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
                         value={productFormData.prix_unitaire}
                         onChange={(e) => setProductFormData({ ...productFormData, prix_unitaire: e.target.value })}
                         placeholder="1299000"
-                        className="mt-2 h-12 bg-white border-gray-300 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                        className="mt-2 h-10 sm:h-12 bg-white border-gray-300 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-base"
                       />
                     </div>
 
@@ -598,7 +598,7 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
                         value={productFormData.quantite_stock}
                         onChange={(e) => setProductFormData({ ...productFormData, quantite_stock: e.target.value })}
                         placeholder="10"
-                        className="mt-2 h-12 bg-white border-gray-300 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                        className="mt-2 h-10 sm:h-12 bg-white border-gray-300 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-base"
                       />
                     </div>
                   </div>
@@ -1032,11 +1032,11 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
       {/* Floating Action Button */}
       <Button
         onClick={() => setShowAddProductForm(true)}
-        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 z-50"
+        className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 z-50 touch-manipulation"
         size="icon"
         title="Ajouter un nouveau produit"
       >
-        <Plus className="w-6 h-6" />
+        <Plus className="w-5 h-5 sm:w-6 sm:h-6" />
       </Button>
     </div>
   )

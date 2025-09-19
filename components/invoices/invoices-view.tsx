@@ -293,7 +293,8 @@ export const InvoicesView = React.memo(function InvoicesView({
           <CardTitle className="text-card-foreground">Liste des Factures</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          {/* Desktop Table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
@@ -371,12 +372,93 @@ export const InvoicesView = React.memo(function InvoicesView({
                 ))}
               </tbody>
             </table>
-            {invoices.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
-                Aucune facture trouvée. Créez votre première facture !
-              </div>
-            )}
           </div>
+
+          {/* Mobile Card Layout */}
+          <div className="md:hidden space-y-4">
+            {invoices.map((invoice) => (
+              <Card key={invoice.id} className="bg-white border border-gray-200 shadow-sm">
+                <CardContent className="p-4">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <h3 className="font-semibold text-gray-900">{invoice.invoice_number}</h3>
+                      <p className="text-sm text-gray-600">{invoice.client_name}</p>
+                    </div>
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        invoice.status === "paid"
+                          ? "bg-green-100 text-green-800"
+                          : invoice.status === "sent"
+                            ? "bg-blue-100 text-blue-800"
+                            : invoice.status === "overdue"
+                              ? "bg-red-100 text-red-800"
+                              : "bg-gray-100 text-gray-800"
+                      }`}
+                    >
+                      {invoice.status === "paid"
+                        ? "Payée"
+                        : invoice.status === "sent"
+                          ? "Envoyée"
+                          : invoice.status === "overdue"
+                            ? "En retard"
+                            : "Brouillon"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mb-3 text-sm">
+                    <div>
+                      <p className="text-gray-500">Date</p>
+                      <p className="font-medium">{new Date(invoice.invoice_date).toLocaleDateString("fr-FR")}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Montant</p>
+                      <p className="font-medium text-green-600">{invoice.total_amount.toLocaleString("fr-FR")} FCFA</p>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end space-x-2">
+                    <Button
+                      onClick={() => printInvoice(invoice)}
+                      variant="outline"
+                      size="sm"
+                      className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                    >
+                      <Printer className="w-4 h-4 mr-1" />
+                      Imprimer
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50">
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Supprimer
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Êtes-vous sûr?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Voulez-vous vraiment supprimer la facture ?
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Annuler</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleDeleteInvoice(invoice.id)}>
+                            Confirmer
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {invoices.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+              Aucune facture trouvée. Créez votre première facture !
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
