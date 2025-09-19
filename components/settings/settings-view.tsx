@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Building, User, Edit, Save, X, Upload } from "lucide-react"
+import { Building, User, Edit, Save, X, Upload, Moon, Sun } from "lucide-react"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 interface CompanySettings {
   companyName: string
@@ -38,9 +39,13 @@ export const SettingsView = React.memo(function SettingsView({
 }: SettingsViewProps) {
   return (
     <div className="space-y-6">
-      <div className="bg-primary rounded-xl p-6 text-white">
-        <h1 className="text-2xl font-bold mb-2 text-white">Paramètres</h1>
-        <p className="text-white">Configuration de l'entreprise et de l'administrateur</p>
+      <div className="bg-gradient-to-r from-slate-500/10 via-gray-500/5 to-zinc-500/10 rounded-3xl p-8 border border-slate-200/50 dark:border-slate-700/50 shadow-lg backdrop-blur-sm">
+        <div>
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-slate-600 via-gray-600 to-zinc-600 bg-clip-text text-transparent mb-2">
+            Paramètres
+          </h1>
+          <p className="text-slate-600 dark:text-slate-300">Configuration de l'entreprise et de l'administrateur</p>
+        </div>
       </div>
 
       <Card className="bg-card border-border shadow-sm">
@@ -170,6 +175,24 @@ export const SettingsView = React.memo(function SettingsView({
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card className="bg-card border-border shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-card-foreground flex items-center gap-2">
+            <Sun className="w-5 h-5" />
+            Apparence
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between p-4 bg-muted/20 rounded-lg">
+            <div>
+              <p className="font-medium text-card-foreground">Mode sombre</p>
+              <p className="text-muted-foreground text-sm">Basculer entre le mode clair et sombre</p>
+            </div>
+            <ThemeToggle />
+          </div>
         </CardContent>
       </Card>
     </div>

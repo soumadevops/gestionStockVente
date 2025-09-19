@@ -55,7 +55,6 @@ import { SalesView } from "@/components/sales/sales-view"
 import { InvoicesView } from "@/components/invoices/invoices-view"
 import { SettingsView } from "@/components/settings/settings-view"
 import { LoadingPage, LoadingCard } from "@/components/ui/loading"
-import { ThemeToggle } from "@/components/theme-toggle"
 
 interface Sale {
   id: string
@@ -81,7 +80,6 @@ interface Product {
   photo_url?: string
   imei_telephone?: string
   provenance?: string
-  provenance_id?: string
   created_at?: string
   updated_at?: string
 }
@@ -308,12 +306,11 @@ export default function SalesManagementApp() {
           throw testError
         }
 
-        const [salesResponse, productsResponse, invoicesResponse, settingsResponse, provenancesResponse] = await Promise.all([
+        const [salesResponse, productsResponse, invoicesResponse, settingsResponse] = await Promise.all([
           supabase.from("sales").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
-          supabase.from("products").select("*, provenances (*)").eq("user_id", user.id).order("created_at", { ascending: false }),
+          supabase.from("products").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
           supabase.from("invoices").select("*, invoice_items (*)").eq("user_id", user.id).order("created_at", { ascending: false }),
           supabase.from("company_settings").select("*").eq("user_id", user.id).limit(1).single(),
-          supabase.from("provenances").select("*").eq("user_id", user.id).order("nom_provenance", { ascending: true }),
         ])
 
         if (salesResponse.error) {
@@ -347,11 +344,6 @@ export default function SalesManagementApp() {
           })
           setLogoPreview(settingsResponse.data.logo_url || null)
         }
-
-        if (provenancesResponse.error && provenancesResponse.error.code !== "42P01") {
-          throw provenancesResponse.error
-        }
-        setProvenances(provenancesResponse.data || [])
       } catch (err) {
         console.error("[v0] Error loading data:", err)
         // Error handling removed - app continues with empty data
@@ -885,6 +877,7 @@ export default function SalesManagementApp() {
             ...productFormData,
             prix_unitaire: Number.parseFloat(productFormData.prix_unitaire),
             quantite_stock: Number.parseInt(productFormData.quantite_stock),
+            provenance: productFormData.provenance.trim() || null,
             photo_url: photoUrl,
           })
           .eq("id", editingProductId)
@@ -980,7 +973,11 @@ export default function SalesManagementApp() {
         setShowAddForm(false)
       } catch (err) {
         console.error("Error adding sale:", err)
-        // Error handling removed - app continues with current data
+        toast({
+          title: "Erreur",
+          description: `Erreur lors de l'ajout de la vente: ${err instanceof Error ? err.message : "Erreur inconnue"}`,
+          variant: "destructive",
+        })
       }
     }
   }
@@ -1270,7 +1267,7 @@ export default function SalesManagementApp() {
 
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 text-foreground">
       <Toaster />
 
       <SuccessModal
@@ -1280,7 +1277,7 @@ export default function SalesManagementApp() {
         subMessage={successModal.subMessage}
       />
 
-      <header className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-b border-border/50 shadow-lg backdrop-blur-sm">
+      <header className="bg-gradient-to-r from-indigo-600/10 via-purple-600/5 to-pink-600/10 border-b border-slate-200/50 dark:border-slate-700/50 shadow-xl backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-6 space-y-4 sm:space-y-0">
             <div className="flex items-center space-x-4">
@@ -1315,16 +1312,15 @@ export default function SalesManagementApp() {
                 <User className="w-4 h-4" aria-hidden="true" />
                 <span>{companySettings.adminName}</span>
               </div>
-              <ThemeToggle />
               <div className="flex space-x-2" role="tablist" aria-label="Onglets de navigation">
                 <Button
                   variant={activeTab === "dashboard" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setActiveTab("dashboard")}
-                  className={`transition-all duration-200 hover:scale-105 ${
+                  className={`transition-all duration-300 hover:scale-105 rounded-full px-6 py-2 ${
                     activeTab === "dashboard"
-                      ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-lg ring-2 ring-primary/20"
-                      : "hover:bg-primary/10 hover:text-primary"
+                      ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg ring-2 ring-indigo-500/30 hover:shadow-xl"
+                      : "hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 dark:hover:from-indigo-900/20 dark:hover:to-purple-900/20 hover:text-indigo-600 dark:hover:text-indigo-400"
                   }`}
                   aria-selected={activeTab === "dashboard"}
                   role="tab"
@@ -1338,10 +1334,10 @@ export default function SalesManagementApp() {
                   variant={activeTab === "ventes" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setActiveTab("ventes")}
-                  className={`transition-all duration-200 hover:scale-105 ${
+                  className={`transition-all duration-300 hover:scale-105 rounded-full px-6 py-2 ${
                     activeTab === "ventes"
-                      ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-lg ring-2 ring-primary/20"
-                      : "hover:bg-primary/10 hover:text-primary"
+                      ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg ring-2 ring-emerald-500/30 hover:shadow-xl"
+                      : "hover:bg-gradient-to-r hover:from-emerald-50 hover:to-teal-50 dark:hover:from-emerald-900/20 dark:hover:to-teal-900/20 hover:text-emerald-600 dark:hover:text-emerald-400"
                   }`}
                   aria-selected={activeTab === "ventes"}
                   role="tab"
@@ -1355,10 +1351,10 @@ export default function SalesManagementApp() {
                   variant={activeTab === "stock" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setActiveTab("stock")}
-                  className={`transition-all duration-200 hover:scale-105 ${
+                  className={`transition-all duration-300 hover:scale-105 rounded-full px-6 py-2 ${
                     activeTab === "stock"
-                      ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-lg ring-2 ring-primary/20"
-                      : "hover:bg-primary/10 hover:text-primary"
+                      ? "bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-lg ring-2 ring-amber-500/30 hover:shadow-xl"
+                      : "hover:bg-gradient-to-r hover:from-amber-50 hover:to-orange-50 dark:hover:from-amber-900/20 dark:hover:to-orange-900/20 hover:text-amber-600 dark:hover:text-amber-400"
                   }`}
                   aria-selected={activeTab === "stock"}
                   role="tab"
@@ -1372,10 +1368,10 @@ export default function SalesManagementApp() {
                   variant={activeTab === "factures" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setActiveTab("factures")}
-                  className={`transition-all duration-200 hover:scale-105 ${
+                  className={`transition-all duration-300 hover:scale-105 rounded-full px-6 py-2 ${
                     activeTab === "factures"
-                      ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-lg ring-2 ring-primary/20"
-                      : "hover:bg-primary/10 hover:text-primary"
+                      ? "bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow-lg ring-2 ring-rose-500/30 hover:shadow-xl"
+                      : "hover:bg-gradient-to-r hover:from-rose-50 hover:to-pink-50 dark:hover:from-rose-900/20 dark:hover:to-pink-900/20 hover:text-rose-600 dark:hover:text-rose-400"
                   }`}
                   aria-selected={activeTab === "factures"}
                   role="tab"
@@ -1389,10 +1385,10 @@ export default function SalesManagementApp() {
                   variant={activeTab === "settings" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setActiveTab("settings")}
-                  className={`transition-all duration-200 hover:scale-105 ${
+                  className={`transition-all duration-300 hover:scale-105 rounded-full px-6 py-2 ${
                     activeTab === "settings"
-                      ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-lg ring-2 ring-primary/20"
-                      : "hover:bg-primary/10 hover:text-primary"
+                      ? "bg-gradient-to-r from-slate-600 to-gray-600 text-white shadow-lg ring-2 ring-slate-500/30 hover:shadow-xl"
+                      : "hover:bg-gradient-to-r hover:from-slate-50 hover:to-gray-50 dark:hover:from-slate-900/20 dark:hover:to-gray-900/20 hover:text-slate-600 dark:hover:text-slate-400"
                   }`}
                   aria-selected={activeTab === "settings"}
                   role="tab"
@@ -1417,7 +1413,7 @@ export default function SalesManagementApp() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto p-4" role="main">
+      <main className="max-w-7xl mx-auto p-6" role="main">
         {activeTab === "dashboard" ? (
           <div role="tabpanel" id="dashboard-panel" aria-labelledby="dashboard-tab">
             <DashboardView
@@ -1437,12 +1433,12 @@ export default function SalesManagementApp() {
               filteredVentes={filteredVentes}
               searchTerm={searchTerm}
               setSearchTerm={setSearchTerm}
-              showAddForm={showAddForm}
-              setShowAddForm={setShowAddForm}
+              showAddForm={showAddSaleForm}
+              setShowAddForm={setShowAddSaleForm}
               editingId={editingId}
-              formData={formData}
-              setFormData={setFormData}
-              handleAddVente={handleAddVente}
+              formData={saleFormData}
+              setFormData={setSaleFormData}
+              handleAddVente={handleAddSale}
               handleEditVente={handleEditVente}
               handleSaveEdit={handleSaveEdit}
               handleCancelEdit={handleCancelEdit}
@@ -1454,8 +1450,6 @@ export default function SalesManagementApp() {
             <StockView
               products={products}
               setProducts={setProducts}
-              provenances={provenances}
-              setProvenances={setProvenances}
               user={user}
               searchTerm={searchTerm}
               setSearchTerm={setSearchTerm}

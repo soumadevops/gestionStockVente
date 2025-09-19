@@ -61,15 +61,22 @@ export const SalesView = React.memo(function SalesView({
 }: SalesViewProps) {
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h1 className="text-3xl font-bold text-foreground">Gestion de Vente</h1>
-        <Button
-          onClick={() => setShowAddForm(true)}
-          className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-md"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Nouvelle Vente
-        </Button>
+      <div className="bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-green-500/10 rounded-3xl p-8 border border-emerald-200/50 dark:border-emerald-800/50 shadow-lg backdrop-blur-sm">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-600 via-teal-600 to-green-600 bg-clip-text text-transparent">
+              Gestion de Vente
+            </h1>
+            <p className="text-slate-600 dark:text-slate-300 mt-2">Gérez vos ventes et transactions</p>
+          </div>
+          <Button
+            onClick={() => setShowAddForm(true)}
+            className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 px-6 py-3 rounded-xl"
+          >
+            <Plus className="w-5 h-5 mr-2" />
+            Nouvelle Vente
+          </Button>
+        </div>
       </div>
 
       {(showAddForm || editingId) && (

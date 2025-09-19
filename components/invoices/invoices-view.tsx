@@ -70,14 +70,19 @@ export const InvoicesView = React.memo(function InvoicesView({
 }: InvoicesViewProps) {
   return (
     <div className="space-y-6">
-      <div className="bg-primary rounded-xl p-6 text-white">
+      <div className="bg-gradient-to-r from-rose-500/10 via-pink-500/5 to-purple-500/10 rounded-3xl p-8 border border-rose-200/50 dark:border-rose-800/50 shadow-lg backdrop-blur-sm">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-bold mb-2 text-white">Gestion des Factures</h1>
-            <p className="text-white">Créez, modifiez et imprimez vos factures</p>
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-rose-600 via-pink-600 to-purple-600 bg-clip-text text-transparent mb-2">
+              Gestion des Factures
+            </h1>
+            <p className="text-slate-600 dark:text-slate-300">Créez, modifiez et imprimez vos factures</p>
           </div>
-          <Button onClick={() => setShowAddInvoiceForm(true)} className="bg-white text-primary hover:bg-gray-100">
-            <Plus className="w-4 h-4 mr-2" />
+          <Button
+            onClick={() => setShowAddInvoiceForm(true)}
+            className="bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 px-6 py-3 rounded-xl"
+          >
+            <Plus className="w-5 h-5 mr-2" />
             Nouvelle Facture
           </Button>
         </div>

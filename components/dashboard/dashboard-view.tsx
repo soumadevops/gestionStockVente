@@ -57,12 +57,14 @@ export const DashboardView = React.memo(function DashboardView({
 }: DashboardViewProps) {
   return (
     <div className="space-y-8">
-      <div className="relative overflow-hidden bg-gradient-to-br from-primary via-primary/90 to-primary/80 rounded-2xl p-8 text-white shadow-2xl">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16"></div>
-        <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full translate-y-12 -translate-x-12"></div>
+      <div className="relative overflow-hidden bg-gradient-to-r from-indigo-600/10 via-purple-600/5 to-pink-600/10 rounded-3xl p-8 border border-indigo-200/50 dark:border-indigo-800/50 shadow-lg backdrop-blur-sm">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full -translate-y-16 translate-x-16"></div>
+        <div className="absolute bottom-0 left-0 w-24 h-24 bg-purple-500/10 rounded-full translate-y-12 -translate-x-12"></div>
         <div className="relative z-10">
-          <h1 className="text-3xl font-bold mb-3 text-white">Tableau de Bord</h1>
-          <p className="text-white/90 text-lg">Aperçu de vos performances de vente et gestion de stock</p>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-3">
+            Tableau de Bord
+          </h1>
+          <p className="text-slate-600 dark:text-slate-300 text-lg">Aperçu de vos performances de vente et gestion de stock</p>
         </div>
       </div>
 
