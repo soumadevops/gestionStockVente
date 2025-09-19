@@ -55,6 +55,7 @@ import { SalesView } from "@/components/sales/sales-view"
 import { InvoicesView } from "@/components/invoices/invoices-view"
 import { SettingsView } from "@/components/settings/settings-view"
 import { LoadingPage, LoadingCard } from "@/components/ui/loading"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 interface Sale {
   id: string
@@ -80,6 +81,20 @@ interface Product {
   photo_url?: string
   imei_telephone?: string
   provenance?: string
+  provenance_id?: string
+  created_at?: string
+  updated_at?: string
+}
+
+interface Provenance {
+  id: string
+  nom_provenance: string
+  description?: string
+  pays_origine?: string
+  contact_fournisseur?: string
+  email_fournisseur?: string
+  telephone_fournisseur?: string
+  adresse_fournisseur?: string
   created_at?: string
   updated_at?: string
 }
@@ -152,9 +167,9 @@ export default function SalesManagementApp() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [ventes, setVentes] = useState<Sale[]>([])
   const [products, setProducts] = useState<Product[]>([])
+  const [provenances, setProvenances] = useState<Provenance[]>([])
   const [activeTab, setActiveTab] = useState("dashboard")
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [user, setUser] = useState<any>(null)
 
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -225,8 +240,14 @@ export default function SalesManagementApp() {
 
   const supabase = createClient()
 
+
   const handleLogout = async () => {
     try {
+      if (!supabase?.auth) {
+        console.error("Supabase auth not available")
+        router.push("/auth")
+        return
+      }
       await supabase.auth.signOut()
       router.push("/auth")
     } catch (error) {
@@ -241,7 +262,6 @@ export default function SalesManagementApp() {
 
   const fetchInvoices = async () => {
     try {
-      console.log("[v0] Fetching invoices...")
       const { data, error } = await supabase
         .from("invoices")
         .select(
@@ -253,11 +273,9 @@ export default function SalesManagementApp() {
         .order("created_at", { ascending: false })
 
       if (error) {
-        console.log("[v0] Fetch error:", error)
         throw error
       }
 
-      console.log("[v0] Invoices fetched successfully:", data?.length || 0)
       setInvoices(data || [])
     } catch (error) {
       console.error("Error fetching invoices:", error)
@@ -284,34 +302,38 @@ export default function SalesManagementApp() {
 
       try {
         setLoading(true)
-        console.log("[v0] Starting to load all data...")
 
         const { error: testError } = await supabase.from("sales").select("count", { count: "exact", head: true })
         if (testError) {
-          console.error("[v0] Connection test failed:", testError)
           throw testError
         }
 
-        const [salesResponse, productsResponse, invoicesResponse, settingsResponse] = await Promise.all([
+        const [salesResponse, productsResponse, invoicesResponse, settingsResponse, provenancesResponse] = await Promise.all([
           supabase.from("sales").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
-          supabase.from("products").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
+          supabase.from("products").select("*, provenances (*)").eq("user_id", user.id).order("created_at", { ascending: false }),
           supabase.from("invoices").select("*, invoice_items (*)").eq("user_id", user.id).order("created_at", { ascending: false }),
           supabase.from("company_settings").select("*").eq("user_id", user.id).limit(1).single(),
+          supabase.from("provenances").select("*").eq("user_id", user.id).order("nom_provenance", { ascending: true }),
         ])
 
-        if (salesResponse.error) throw salesResponse.error
+        if (salesResponse.error) {
+          throw salesResponse.error
+        }
         setVentes(salesResponse.data || [])
-        console.log("[v0] Sales loaded:", salesResponse.data?.length)
 
-        if (productsResponse.error && productsResponse.error.code !== "42P01") throw productsResponse.error
+        if (productsResponse.error && productsResponse.error.code !== "42P01") {
+          throw productsResponse.error
+        }
         setProducts(productsResponse.data || [])
-        console.log("[v0] Products loaded:", productsResponse.data?.length)
 
-        if (invoicesResponse.error && invoicesResponse.error.code !== "42P01") throw invoicesResponse.error
+        if (invoicesResponse.error && invoicesResponse.error.code !== "42P01") {
+          throw invoicesResponse.error
+        }
         setInvoices(invoicesResponse.data || [])
-        console.log("[v0] Invoices loaded:", invoicesResponse.data?.length)
 
-        if (settingsResponse.error && settingsResponse.error.code !== "PGRST116") throw settingsResponse.error
+        if (settingsResponse.error && settingsResponse.error.code !== "PGRST116") {
+          throw settingsResponse.error
+        }
         if (settingsResponse.data) {
           setCompanySettings({
             companyName: settingsResponse.data.nom_compagnie,
@@ -325,26 +347,14 @@ export default function SalesManagementApp() {
           })
           setLogoPreview(settingsResponse.data.logo_url || null)
         }
-        console.log("[v0] Settings loaded.")
 
-        console.log("[v0] All data loading completed successfully.")
+        if (provenancesResponse.error && provenancesResponse.error.code !== "42P01") {
+          throw provenancesResponse.error
+        }
+        setProvenances(provenancesResponse.data || [])
       } catch (err) {
         console.error("[v0] Error loading data:", err)
-        let errorMessage = "Une erreur est survenue lors du chargement des données"
-
-        if (err instanceof Error) {
-          if (err.message.includes("42P01")) {
-            errorMessage = "Les tables de la base de données n'existent pas. Veuillez exécuter les scripts SQL dans le dossier 'scripts' via le tableau de bord Supabase."
-          } else if (err.message.includes("permission denied")) {
-            errorMessage = "Erreur de permissions sur la base de données. Vérifiez vos droits d'accès dans Supabase."
-          } else if (err.message.includes("connection")) {
-            errorMessage = "Erreur de connexion à la base de données. Vérifiez votre connexion internet et les paramètres dans .env.local."
-          } else {
-            errorMessage = err.message
-          }
-        }
-
-        setError(errorMessage)
+        // Error handling removed - app continues with empty data
       } finally {
         setLoading(false)
       }
@@ -357,10 +367,6 @@ export default function SalesManagementApp() {
     if (!user) return
 
     try {
-      console.log("[v0] Starting invoice creation...")
-      console.log("[v0] Invoice form data:", invoiceFormData)
-      console.log("[v0] Invoice items:", invoiceItems)
-
       if (!invoiceFormData.client_name.trim()) {
         toast({
           title: "Erreur",
@@ -384,8 +390,6 @@ export default function SalesManagementApp() {
       const tax_amount = subtotal * tax_rate
       const total_amount = subtotal + tax_amount
 
-      console.log("[v0] Calculated totals:", { subtotal, tax_rate, tax_amount, total_amount })
-
       const { data: existingInvoices, error: countError } = await supabase
         .from("invoices")
         .select("invoice_number")
@@ -393,7 +397,6 @@ export default function SalesManagementApp() {
         .limit(1)
 
       if (countError) {
-        console.log("[v0] Error fetching invoice count:", countError)
         throw countError
       }
 
@@ -407,7 +410,6 @@ export default function SalesManagementApp() {
       }
 
       const invoiceNumber = `INV-${nextNumber.toString().padStart(4, "0")}`
-      console.log("[v0] Generated invoice number:", invoiceNumber)
 
       const { data: invoiceData, error: invoiceError } = await supabase
         .from("invoices")
@@ -432,11 +434,8 @@ export default function SalesManagementApp() {
         .single()
 
       if (invoiceError) {
-        console.log("[v0] Error creating invoice:", invoiceError)
         throw invoiceError
       }
-
-      console.log("[v0] Invoice created successfully:", invoiceData)
 
       const itemsToInsert = invoiceItems.map((item) => ({
         invoice_id: invoiceData.id,
@@ -451,11 +450,8 @@ export default function SalesManagementApp() {
       const { error: itemsError } = await supabase.from("invoice_items").insert(itemsToInsert)
 
       if (itemsError) {
-        console.log("[v0] Error creating invoice items:", itemsError)
         throw itemsError
       }
-
-      console.log("[v0] Invoice items created successfully")
 
       await fetchInvoices()
       setShowAddInvoiceForm(false)
@@ -470,8 +466,6 @@ export default function SalesManagementApp() {
         notes: "",
       })
       setInvoiceItems([{ product_name: "", description: "", quantity: 1, unit_price: 0 }])
-
-      console.log("[v0] Invoice creation completed successfully")
       setSuccessModal({
         isOpen: true,
         message: "Facture créée avec succès!",
@@ -918,7 +912,7 @@ export default function SalesManagementApp() {
         setProductPhotoPreview(null)
       } catch (err) {
         console.error("Error updating product:", err)
-        setError(err instanceof Error ? err.message : "Erreur lors de la modification du produit")
+        // Error handling removed - app continues with current data
       }
     }
   }
@@ -941,7 +935,9 @@ export default function SalesManagementApp() {
   }
 
   const handleAddVente = async () => {
-    if (!user) return
+    if (!user) {
+      return
+    }
 
     if (
       formData.nom_prenom_client &&
@@ -953,18 +949,20 @@ export default function SalesManagementApp() {
       formData.prix
     ) {
       try {
+        const insertData = {
+          ...formData,
+          prix: Number.parseInt(formData.prix),
+          user_id: user.id,
+        }
+
         const { data, error } = await supabase
           .from("sales")
-          .insert([
-            {
-              ...formData,
-              prix: Number.parseInt(formData.prix),
-              user_id: user.id,
-            },
-          ])
+          .insert([insertData])
           .select()
 
-        if (error) throw error
+        if (error) {
+          throw error
+        }
 
         if (data && data[0]) {
           setVentes([data[0], ...ventes])
@@ -982,7 +980,7 @@ export default function SalesManagementApp() {
         setShowAddForm(false)
       } catch (err) {
         console.error("Error adding sale:", err)
-        setError(err instanceof Error ? err.message : "Erreur lors de l'ajout")
+        // Error handling removed - app continues with current data
       }
     }
   }
@@ -1038,7 +1036,7 @@ export default function SalesManagementApp() {
         })
       } catch (err) {
         console.error("Error updating sale:", err)
-        setError(err instanceof Error ? err.message : "Erreur lors de la modification")
+        // Error handling removed - app continues with current data
       }
     }
   }
@@ -1265,37 +1263,7 @@ export default function SalesManagementApp() {
     return <LoadingPage message="Chargement de vos données..." />
   }
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="w-full max-w-md bg-card border-border shadow-lg">
-          <CardContent className="text-center p-6">
-            <X className="w-16 h-16 text-destructive mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-card-foreground mb-2">Erreur de chargement</h2>
-            <p className="text-muted-foreground mb-6">{error}</p>
-            <div className="space-y-3">
-              <Button
-                onClick={() => {
-                  setError(null)
-                  window.location.reload()
-                }}
-                className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                Réessayer
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => router.push("/auth")}
-                className="w-full border-border bg-transparent"
-              >
-                Retour à la connexion
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
+  // Error handling removed as requested
 
 
 
@@ -1347,6 +1315,7 @@ export default function SalesManagementApp() {
                 <User className="w-4 h-4" aria-hidden="true" />
                 <span>{companySettings.adminName}</span>
               </div>
+              <ThemeToggle />
               <div className="flex space-x-2" role="tablist" aria-label="Onglets de navigation">
                 <Button
                   variant={activeTab === "dashboard" ? "default" : "ghost"}
@@ -1485,6 +1454,8 @@ export default function SalesManagementApp() {
             <StockView
               products={products}
               setProducts={setProducts}
+              provenances={provenances}
+              setProvenances={setProvenances}
               user={user}
               searchTerm={searchTerm}
               setSearchTerm={setSearchTerm}

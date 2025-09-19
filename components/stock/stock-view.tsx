@@ -23,6 +23,21 @@ interface Product {
   photo_url?: string
   imei_telephone?: string
   provenance?: string
+  provenance_id?: string
+  provenances?: Provenance
+  created_at?: string
+  updated_at?: string
+}
+
+interface Provenance {
+  id: string
+  nom_provenance: string
+  description?: string
+  pays_origine?: string
+  contact_fournisseur?: string
+  email_fournisseur?: string
+  telephone_fournisseur?: string
+  adresse_fournisseur?: string
   created_at?: string
   updated_at?: string
 }
@@ -30,6 +45,8 @@ interface Product {
 interface StockViewProps {
   products: Product[]
   setProducts: (products: Product[]) => void
+  provenances: Provenance[]
+  setProvenances: (provenances: Provenance[]) => void
   user: any
   searchTerm: string
   setSearchTerm: (term: string) => void
@@ -39,7 +56,7 @@ const PHONE_BRANDS = [
   "Apple", "Samsung", "Huawei", "Xiaomi", "Oppo", "Vivo", "OnePlus", "Google", "Sony", "LG", "Nokia", "Motorola", "Asus", "Realme", "Infinix", "Tecno", "Itel", "Autre"
 ]
 
-export function StockView({ products, setProducts, user, searchTerm, setSearchTerm }: StockViewProps) {
+export function StockView({ products, setProducts, provenances, setProvenances, user, searchTerm, setSearchTerm }: StockViewProps) {
   const { toast } = useToast()
   const supabase = createClient()
 
@@ -53,10 +70,13 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
     quantite_stock: "",
     description: "",
     imei_telephone: "",
-    provenance: "",
+    provenance_id: "",
   })
   const [productPhoto, setProductPhoto] = useState<File | null>(null)
   const [productPhotoPreview, setProductPhotoPreview] = useState<string | null>(null)
+  const [isAddingProduct, setIsAddingProduct] = useState(false)
+  const [isSavingProduct, setIsSavingProduct] = useState(false)
+  const [deletingProductId, setDeletingProductId] = useState<string | null>(null)
 
   const filteredProducts = products.filter(
     (product) =>
@@ -87,6 +107,7 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
       return
     }
 
+    setIsAddingProduct(true)
     try {
       // Validation des champs requis
       if (!productFormData.nom_produit.trim()) {
@@ -164,7 +185,7 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
         quantite_stock: Number.parseInt(productFormData.quantite_stock),
         description: productFormData.description.trim() || null,
         imei_telephone: productFormData.imei_telephone.trim() || null,
-        provenance: productFormData.provenance.trim() || null,
+        provenance_id: productFormData.provenance_id ? productFormData.provenance_id : null,
         photo_url: photoUrl,
         user_id: user.id,
       }
@@ -193,7 +214,7 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
         quantite_stock: "",
         description: "",
         imei_telephone: "",
-        provenance: "",
+        provenance_id: "",
       })
       setProductPhoto(null)
       setProductPhotoPreview(null)
@@ -210,6 +231,8 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
         description: `Erreur lors de l'ajout du produit: ${error instanceof Error ? error.message : "Erreur inconnue"}`,
         variant: "destructive",
       })
+    } finally {
+      setIsAddingProduct(false)
     }
   }
 
@@ -224,7 +247,7 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
         quantite_stock: product.quantite_stock.toString(),
         description: product.description || "",
         imei_telephone: product.imei_telephone || "",
-        provenance: product.provenance || "",
+        provenance_id: product.provenance_id || "",
       })
       setProductPhotoPreview(product.photo_url || null)
       setEditingProductId(id)
@@ -243,6 +266,7 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
       productFormData.prix_unitaire &&
       productFormData.quantite_stock
     ) {
+      setIsSavingProduct(true)
       try {
         let photoUrl = productPhotoPreview
 
@@ -267,6 +291,7 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
             ...productFormData,
             prix_unitaire: Number.parseFloat(productFormData.prix_unitaire),
             quantite_stock: Number.parseInt(productFormData.quantite_stock),
+            provenance_id: productFormData.provenance_id ? productFormData.provenance_id : null,
             photo_url: photoUrl,
           })
           .eq("id", editingProductId)
@@ -288,7 +313,7 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
           quantite_stock: "",
           description: "",
           imei_telephone: "",
-          provenance: "",
+          provenance_id: "",
         })
         setProductPhoto(null)
         setProductPhotoPreview(null)
@@ -305,6 +330,8 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
           description: err instanceof Error ? err.message : "Erreur lors de la modification du produit",
           variant: "destructive",
         })
+      } finally {
+        setIsSavingProduct(false)
       }
     }
   }
@@ -320,7 +347,7 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
       quantite_stock: "",
       description: "",
       imei_telephone: "",
-      provenance: "",
+      provenance_id: "",
     })
     setProductPhoto(null)
     setProductPhotoPreview(null)
@@ -329,6 +356,7 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
   const handleDeleteProduct = async (id: string) => {
     if (!user) return
 
+    setDeletingProductId(id)
     try {
       const { error } = await supabase
         .from("products")
@@ -350,6 +378,8 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
         description: `Erreur lors de la suppression: ${error instanceof Error ? error.message : "Erreur inconnue"}`,
         variant: "destructive",
       })
+    } finally {
+      setDeletingProductId(null)
     }
   }
 
@@ -362,13 +392,6 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
           </h1>
           <p className="text-gray-600 mt-2">Gérez votre inventaire de produits</p>
         </div>
-        <Button
-          onClick={() => setShowAddProductForm(true)}
-          className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 px-6 py-3 rounded-xl"
-        >
-          <Plus className="w-5 h-5 mr-2" />
-          Nouveau Produit
-        </Button>
       </div>
 
       {(showAddProductForm || editingProductId) && (
@@ -466,13 +489,21 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
                 <Label htmlFor="provenance" className="text-card-foreground">
                   Provenance
                 </Label>
-                <Input
-                  id="provenance"
-                  value={productFormData.provenance}
-                  onChange={(e) => setProductFormData({ ...productFormData, provenance: e.target.value })}
-                  placeholder="Ex: Chine"
-                  className="bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
+                <Select
+                  value={productFormData.provenance_id}
+                  onValueChange={(value) => setProductFormData({ ...productFormData, provenance_id: value })}
+                >
+                  <SelectTrigger className="bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
+                    <SelectValue placeholder="Sélectionnez une provenance" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {provenances.map((provenance) => (
+                      <SelectItem key={provenance.id} value={provenance.id}>
+                        {provenance.nom_provenance}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="sm:col-span-2">
                 <Label htmlFor="description" className="text-card-foreground">
@@ -537,6 +568,7 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
             <div className="flex space-x-2 pt-4">
               <Button
                 onClick={editingProductId ? handleSaveProductEdit : handleAddProduct}
+                loading={editingProductId ? isSavingProduct : isAddingProduct}
                 className="bg-primary text-primary-foreground hover:bg-primary/90"
               >
                 <Save className="w-4 h-4 mr-2" />
@@ -608,10 +640,10 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
                         <Package className="w-4 h-4 mr-2" />
                         Stock: {product.quantite_stock}
                       </div>
-                      {product.provenance && (
+                      {product.provenances && (
                         <div className="flex items-center px-3 py-2 bg-blue-100 text-blue-700 rounded-lg">
                           <Package className="w-4 h-4 mr-2" />
-                          {product.provenance}
+                          {product.provenances.nom_provenance}
                         </div>
                       )}
                       {product.imei_telephone && (
@@ -651,8 +683,14 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>Annuler</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleDeleteProduct(product.id)}>
-                          Supprimer
+                        <AlertDialogAction asChild>
+                          <Button
+                            onClick={() => handleDeleteProduct(product.id)}
+                            loading={deletingProductId === product.id}
+                            variant="destructive"
+                          >
+                            Supprimer
+                          </Button>
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
