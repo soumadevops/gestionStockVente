@@ -75,6 +75,8 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null)
   const [stockFilter, setStockFilter] = useState<string>("all") // all, in-stock, low-stock, out-of-stock
   const [brandFilter, setBrandFilter] = useState<string>("all")
+  const [editingStockId, setEditingStockId] = useState<string | null>(null)
+  const [newStockQuantity, setNewStockQuantity] = useState<string>("")
 
   const filteredProducts = products.filter((product) => {
     // Search filter
@@ -405,6 +407,49 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
     } finally {
       setDeletingProductId(null)
     }
+  }
+
+  const handleUpdateStockQuantity = async (productId: string, newQuantity: number) => {
+    if (!user) return
+
+    try {
+      const { data, error } = await supabase
+        .from("products")
+        .update({
+          quantite_stock: newQuantity,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", productId)
+        .eq("user_id", user.id)
+        .select()
+
+      if (error) throw error
+
+      if (data && data[0]) {
+        setProducts(products.map((product) =>
+          product.id === productId ? data[0] : product
+        ))
+        toast({
+          title: "Succès",
+          description: "Quantité en stock mise à jour!",
+        })
+      }
+    } catch (error) {
+      console.error("Error updating stock quantity:", error)
+      toast({
+        title: "Erreur",
+        description: `Erreur lors de la mise à jour: ${error instanceof Error ? error.message : "Erreur inconnue"}`,
+        variant: "destructive",
+      })
+    } finally {
+      setEditingStockId(null)
+      setNewStockQuantity("")
+    }
+  }
+
+  const startEditingStock = (productId: string, currentQuantity: number) => {
+    setEditingStockId(productId)
+    setNewStockQuantity(currentQuantity.toString())
   }
 
   return (
@@ -937,9 +982,46 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
 
                 {/* Stock Info */}
                 <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="bg-gray-50 rounded-lg p-3 text-center">
-                    <div className="text-lg font-bold text-gray-900">{product.quantite_stock}</div>
-                    <div className="text-xs text-gray-600">En stock</div>
+                  <div className="bg-gray-50 rounded-lg p-3 text-center relative group">
+                    {editingStockId === product.id ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <Input
+                          type="number"
+                          value={newStockQuantity}
+                          onChange={(e) => setNewStockQuantity(e.target.value)}
+                          className="w-16 h-8 text-center text-sm"
+                          min="0"
+                        />
+                        <Button
+                          size="sm"
+                          onClick={() => handleUpdateStockQuantity(product.id, parseInt(newStockQuantity) || 0)}
+                          className="h-6 px-2"
+                        >
+                          ✓
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setEditingStockId(null)}
+                          className="h-6 px-2"
+                        >
+                          ✕
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="text-lg font-bold text-gray-900">{product.quantite_stock}</div>
+                        <div className="text-xs text-gray-600">En stock</div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => startEditingStock(product.id, product.quantite_stock)}
+                          className="absolute -top-1 -right-1 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          ✏️
+                        </Button>
+                      </>
+                    )}
                   </div>
                   <div className="bg-blue-50 rounded-lg p-3 text-center">
                     <div className="text-lg font-bold text-blue-600">

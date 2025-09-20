@@ -104,8 +104,24 @@ interface CompanySettings {
   nom_compagnie: string
   nom_admin: string
   logo_url?: string
+  email: string
+  phone: string
+  address: string
+  website: string
+  tax_id: string
+  currency: string
+  language: string
+  timezone: string
   created_at?: string
   updated_at?: string
+}
+
+interface UserPreferences {
+  emailNotifications: boolean
+  smsNotifications: boolean
+  autoBackup: boolean
+  twoFactorAuth: boolean
+  dataExport: boolean
 }
 
 interface Invoice {
@@ -175,6 +191,7 @@ export default function SalesManagementApp() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [showAddInvoiceForm, setShowAddInvoiceForm] = useState(false)
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null)
+  const [isSubmittingInvoice, setIsSubmittingInvoice] = useState(false)
   const [invoiceFormData, setInvoiceFormData] = useState({
     client_name: "",
     client_email: "",
@@ -205,6 +222,21 @@ export default function SalesManagementApp() {
     companyName: "VentesPro",
     adminName: "Administrateur",
     logoUrl: "",
+    email: "",
+    phone: "",
+    address: "",
+    website: "",
+    taxId: "",
+    currency: "XOF",
+    language: "fr",
+    timezone: "Africa/Dakar",
+  })
+  const [userPreferences, setUserPreferences] = useState<UserPreferences>({
+    emailNotifications: true,
+    smsNotifications: false,
+    autoBackup: true,
+    twoFactorAuth: false,
+    dataExport: true,
   })
   const [isEditingSettings, setIsEditingSettings] = useState(false)
   const [tempSettings, setTempSettings] = useState(companySettings)
@@ -297,6 +329,83 @@ export default function SalesManagementApp() {
     checkUser()
   }, [supabase.auth, router])
 
+  // Debug database schema and RLS policies
+  useEffect(() => {
+    const debugDatabase = async () => {
+      if (!user) return
+
+      try {
+        console.log("🔍 Debugging database schema and RLS policies...")
+
+        // Check if invoices table exists and has user_id column
+        const { data: invoiceColumns, error: invoiceError } = await supabase
+          .from("information_schema.columns")
+          .select("column_name")
+          .eq("table_name", "invoices")
+          .eq("table_schema", "public")
+
+        if (invoiceError) {
+          console.error("❌ Error checking invoices table:", invoiceError)
+        } else {
+          console.log("📋 Invoices table columns:", invoiceColumns?.map(col => col.column_name))
+          const hasUserId = invoiceColumns?.some(col => col.column_name === "user_id")
+          console.log("👤 Invoices table has user_id column:", hasUserId)
+        }
+
+        // Check if invoice_items table exists and has user_id column
+        const { data: itemColumns, error: itemError } = await supabase
+          .from("information_schema.columns")
+          .select("column_name")
+          .eq("table_name", "invoice_items")
+          .eq("table_schema", "public")
+
+        if (itemError) {
+          console.error("❌ Error checking invoice_items table:", itemError)
+        } else {
+          console.log("📋 Invoice_items table columns:", itemColumns?.map(col => col.column_name))
+          const hasUserId = itemColumns?.some(col => col.column_name === "user_id")
+          console.log("👤 Invoice_items table has user_id column:", hasUserId)
+        }
+
+        // Test RLS policies by trying to insert a test invoice
+        console.log("🧪 Testing RLS policies...")
+        const testInvoiceData = {
+          invoice_number: "TEST-" + Date.now(),
+          client_name: "Test Client",
+          subtotal: 100,
+          tax_rate: 18,
+          tax_amount: 18,
+          total_amount: 118,
+          user_id: user.id,
+        }
+
+        const { data: testResult, error: testError } = await supabase
+          .from("invoices")
+          .insert([testInvoiceData])
+          .select()
+
+        if (testError) {
+          console.error("❌ RLS Policy Test Failed:", testError)
+          console.log("🔧 This indicates the RLS policy is blocking insertions")
+          console.log("📋 Solution: Run the updated SQL script in Supabase dashboard")
+        } else {
+          console.log("✅ RLS Policy Test Passed:", testResult)
+          // Clean up test data
+          if (testResult && testResult[0]) {
+            await supabase.from("invoices").delete().eq("id", testResult[0].id)
+          }
+        }
+
+      } catch (err) {
+        console.error("❌ Database debug error:", err)
+      }
+    }
+
+    if (user) {
+      debugDatabase()
+    }
+  }, [user])
+
   useEffect(() => {
     const loadAllData = async () => {
       if (!user) return
@@ -339,11 +448,27 @@ export default function SalesManagementApp() {
             companyName: settingsResponse.data.nom_compagnie,
             adminName: settingsResponse.data.nom_admin,
             logoUrl: settingsResponse.data.logo_url || "",
+            email: settingsResponse.data.email || "",
+            phone: settingsResponse.data.phone || "",
+            address: settingsResponse.data.address || "",
+            website: settingsResponse.data.website || "",
+            taxId: settingsResponse.data.tax_id || "",
+            currency: settingsResponse.data.currency || "XOF",
+            language: settingsResponse.data.language || "fr",
+            timezone: settingsResponse.data.timezone || "Africa/Dakar",
           })
           setTempSettings({
             companyName: settingsResponse.data.nom_compagnie,
             adminName: settingsResponse.data.nom_admin,
             logoUrl: settingsResponse.data.logo_url || "",
+            email: settingsResponse.data.email || "",
+            phone: settingsResponse.data.phone || "",
+            address: settingsResponse.data.address || "",
+            website: settingsResponse.data.website || "",
+            taxId: settingsResponse.data.tax_id || "",
+            currency: settingsResponse.data.currency || "XOF",
+            language: settingsResponse.data.language || "fr",
+            timezone: settingsResponse.data.timezone || "Africa/Dakar",
           })
           setLogoPreview(settingsResponse.data.logo_url || null)
         }
@@ -359,12 +484,21 @@ export default function SalesManagementApp() {
   }, [user])
 
   const handleAddInvoice = useCallback(async () => {
-    if (!user) return
+    if (!user) {
+      toast({
+        title: "Erreur",
+        description: "Vous devez être connecté pour créer une facture",
+        variant: "destructive",
+      })
+      return
+    }
 
+    setIsSubmittingInvoice(true)
     try {
+      // Validation des champs requis
       if (!invoiceFormData.client_name.trim()) {
         toast({
-          title: "Erreur",
+          title: "Erreur de validation",
           description: "Le nom du client est requis",
           variant: "destructive",
         })
@@ -373,11 +507,24 @@ export default function SalesManagementApp() {
 
       if (invoiceItems.length === 0 || !invoiceItems[0].product_name.trim()) {
         toast({
-          title: "Erreur",
-          description: "Au moins un article est requis",
+          title: "Erreur de validation",
+          description: "Au moins un article avec un nom est requis",
           variant: "destructive",
         })
         return
+      }
+
+      // Validation des articles
+      for (let i = 0; i < invoiceItems.length; i++) {
+        const item = invoiceItems[i]
+        if (item.product_name.trim() && (item.quantity <= 0 || item.unit_price < 0)) {
+          toast({
+            title: "Erreur de validation",
+            description: `Article ${i + 1}: La quantité doit être positive et le prix unitaire doit être >= 0`,
+            variant: "destructive",
+          })
+          return
+        }
       }
 
       const subtotal = invoiceItems.reduce((sum, item) => sum + item.quantity * item.unit_price, 0)
@@ -385,72 +532,92 @@ export default function SalesManagementApp() {
       const tax_amount = subtotal * tax_rate
       const total_amount = subtotal + tax_amount
 
-      const { data: existingInvoices, error: countError } = await supabase
-        .from("invoices")
-        .select("invoice_number")
-        .order("created_at", { ascending: false })
-        .limit(1)
+      console.log("Creating invoice with data:", {
+        client_name: invoiceFormData.client_name,
+        subtotal,
+        tax_rate,
+        total_amount,
+        items_count: invoiceItems.length,
+        user_id: user.id
+      })
 
-      if (countError) {
-        throw countError
+      // Générer le numéro de facture de manière simplifiée
+      const timestamp = Date.now()
+      const invoiceNumber = `INV-${timestamp.toString().slice(-6)}`
+
+      // Créer la facture
+      const invoiceData = {
+        invoice_number: invoiceNumber,
+        client_name: invoiceFormData.client_name.trim(),
+        client_email: invoiceFormData.client_email?.trim() || null,
+        client_phone: invoiceFormData.client_phone?.trim() || null,
+        client_address: invoiceFormData.client_address?.trim() || null,
+        invoice_date: new Date().toISOString(),
+        due_date: invoiceFormData.due_date || null,
+        subtotal: Math.round(subtotal * 100) / 100, // Arrondir à 2 décimales
+        tax_rate: Number.parseFloat(invoiceFormData.tax_rate),
+        tax_amount: Math.round(tax_amount * 100) / 100,
+        total_amount: Math.round(total_amount * 100) / 100,
+        notes: invoiceFormData.notes?.trim() || null,
+        user_id: user.id,
       }
 
-      let nextNumber = 1
-      if (existingInvoices && existingInvoices.length > 0) {
-        const lastInvoiceNumber = existingInvoices[0].invoice_number
-        const match = lastInvoiceNumber.match(/INV-(\d+)/)
-        if (match) {
-          nextNumber = Number.parseInt(match[1]) + 1
-        }
-      }
+      console.log("Inserting invoice:", invoiceData)
 
-      const invoiceNumber = `INV-${nextNumber.toString().padStart(4, "0")}`
-
-      const { data: invoiceData, error: invoiceError } = await supabase
+      const { data: insertedInvoice, error: invoiceError } = await supabase
         .from("invoices")
-        .insert([
-          {
-            invoice_number: invoiceNumber,
-            client_name: invoiceFormData.client_name,
-            client_email: invoiceFormData.client_email || null,
-            client_phone: invoiceFormData.client_phone || null,
-            client_address: invoiceFormData.client_address || null,
-            invoice_date: new Date().toISOString(),
-            due_date: invoiceFormData.due_date || null,
-            subtotal,
-            tax_rate: Number.parseFloat(invoiceFormData.tax_rate),
-            tax_amount,
-            total_amount,
-            notes: invoiceFormData.notes || null,
-            user_id: user.id,
-          },
-        ])
+        .insert([invoiceData])
         .select()
         .single()
 
       if (invoiceError) {
-        throw invoiceError
+        console.error("Invoice insertion error:", invoiceError)
+        throw new Error(`Erreur lors de la création de la facture: ${invoiceError.message}`)
       }
 
-      const itemsToInsert = invoiceItems.map((item) => ({
-        invoice_id: invoiceData.id,
-        product_name: item.product_name,
-        description: item.description || null,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        total_price: item.quantity * item.unit_price,
-        user_id: user.id,
-      }))
-
-      const { error: itemsError } = await supabase.from("invoice_items").insert(itemsToInsert)
-
-      if (itemsError) {
-        throw itemsError
+      if (!insertedInvoice) {
+        throw new Error("La facture n'a pas été créée correctement")
       }
 
+      console.log("Invoice created successfully:", insertedInvoice)
+
+      // Créer les articles de la facture
+      const validItems = invoiceItems.filter(item => item.product_name.trim())
+      if (validItems.length > 0) {
+        const itemsToInsert = validItems.map((item) => ({
+          invoice_id: insertedInvoice.id,
+          product_name: item.product_name.trim(),
+          description: item.description?.trim() || null,
+          quantity: item.quantity,
+          unit_price: Math.round(item.unit_price * 100) / 100,
+          total_price: Math.round((item.quantity * item.unit_price) * 100) / 100,
+          user_id: user.id,
+        }))
+
+        console.log("Inserting invoice items:", itemsToInsert)
+
+        const { error: itemsError } = await supabase
+          .from("invoice_items")
+          .insert(itemsToInsert)
+
+        if (itemsError) {
+          console.error("Invoice items insertion error:", itemsError)
+          // Ne pas échouer complètement si les articles ne peuvent pas être insérés
+          toast({
+            title: "Avertissement",
+            description: "La facture a été créée mais certains articles n'ont pas pu être ajoutés",
+            variant: "default",
+          })
+        } else {
+          console.log("Invoice items created successfully")
+        }
+      }
+
+      // Recharger les factures
       await fetchInvoices()
-      setShowAddInvoiceForm(false)
 
+      // Fermer le formulaire et réinitialiser
+      setShowAddInvoiceForm(false)
       setInvoiceFormData({
         client_name: "",
         client_email: "",
@@ -461,20 +628,35 @@ export default function SalesManagementApp() {
         notes: "",
       })
       setInvoiceItems([{ product_name: "", description: "", quantity: 1, unit_price: 0 }])
+
       setSuccessModal({
         isOpen: true,
         message: "Facture créée avec succès!",
-        subMessage: "La nouvelle facture a été ajoutée à votre système.",
+        subMessage: `Facture ${invoiceNumber} ajoutée à votre système.`,
       })
+
+      toast({
+        title: "Succès",
+        description: `Facture ${invoiceNumber} créée avec succès`,
+      })
+
     } catch (error) {
-      console.error("[v0] Error adding invoice:", error)
+      console.error("Error adding invoice:", error)
+
+      let errorMessage = "Erreur lors de l'ajout de la facture"
+      if (error instanceof Error) {
+        errorMessage = error.message
+      }
+
       toast({
         title: "Erreur",
-        description: `Erreur lors de l'ajout de la facture: ${error instanceof Error ? error.message : "Erreur inconnue"}`,
+        description: errorMessage,
         variant: "destructive",
       })
+    } finally {
+      setIsSubmittingInvoice(false)
     }
-  }, [invoiceFormData, invoiceItems, toast])
+  }, [invoiceFormData, invoiceItems, toast, user, fetchInvoices])
 
   const handleDeleteInvoice = async (id: string) => {
     if (!user) return
@@ -988,7 +1170,7 @@ export default function SalesManagementApp() {
   const handleEditVente = (id: string) => {
     const vente = ventes.find((v) => v.id === id)
     if (vente) {
-      setFormData({ ...vente, prix: vente.prix.toString() })
+      setSaleFormData({ ...vente, prix: vente.prix.toString() })
       setEditingId(id)
       setActiveTab("ventes")
     }
@@ -999,20 +1181,20 @@ export default function SalesManagementApp() {
 
     if (
       editingId &&
-      formData.nom_prenom_client &&
-      formData.numero_telephone &&
-      formData.date_vente &&
-      formData.modele &&
-      formData.marque &&
-      formData.imei_telephone &&
-      formData.prix
+      saleFormData.nom_prenom_client &&
+      saleFormData.numero_telephone &&
+      saleFormData.date_vente &&
+      saleFormData.modele &&
+      saleFormData.marque &&
+      saleFormData.imei_telephone &&
+      saleFormData.prix
     ) {
       try {
         const { data, error } = await supabase
           .from("sales")
           .update({
-            ...formData,
-            prix: Number.parseInt(formData.prix),
+            ...saleFormData,
+            prix: Number.parseInt(saleFormData.prix),
           })
           .eq("id", editingId)
           .eq("user_id", user.id)
@@ -1025,7 +1207,7 @@ export default function SalesManagementApp() {
         }
 
         setEditingId(null)
-        setFormData({
+        setSaleFormData({
           nom_prenom_client: "",
           numero_telephone: "",
           date_vente: "",
@@ -1034,17 +1216,26 @@ export default function SalesManagementApp() {
           imei_telephone: "",
           prix: "",
         })
+        setSuccessModal({
+          isOpen: true,
+          message: "Vente modifiée avec succès!",
+          subMessage: "Les modifications ont été sauvegardées.",
+        })
       } catch (err) {
         console.error("Error updating sale:", err)
-        // Error handling removed - app continues with current data
+        toast({
+          title: "Erreur",
+          description: `Erreur lors de la modification de la vente: ${err instanceof Error ? err.message : "Erreur inconnue"}`,
+          variant: "destructive",
+        })
       }
     }
   }
 
   const handleCancelEdit = () => {
     setEditingId(null)
-    setShowAddForm(false)
-    setFormData({
+    setShowAddSaleForm(false)
+    setSaleFormData({
       nom_prenom_client: "",
       numero_telephone: "",
       date_vente: "",
@@ -1061,7 +1252,7 @@ export default function SalesManagementApp() {
     // Validation
     if (!tempSettings.companyName.trim()) {
       toast({
-        title: "Erreur",
+        title: "Erreur de validation",
         description: "Le nom de l'entreprise est requis",
         variant: "destructive",
       })
@@ -1070,7 +1261,7 @@ export default function SalesManagementApp() {
 
     if (!tempSettings.adminName.trim()) {
       toast({
-        title: "Erreur",
+        title: "Erreur de validation",
         description: "Le nom de l'administrateur est requis",
         variant: "destructive",
       })
@@ -1107,6 +1298,14 @@ export default function SalesManagementApp() {
         nom_compagnie: tempSettings.companyName.trim(),
         nom_admin: tempSettings.adminName.trim(),
         logo_url: logoUrl,
+        email: tempSettings.email?.trim() || null,
+        phone: tempSettings.phone?.trim() || null,
+        address: tempSettings.address?.trim() || null,
+        website: tempSettings.website?.trim() || null,
+        tax_id: tempSettings.taxId?.trim() || null,
+        currency: tempSettings.currency,
+        language: tempSettings.language,
+        timezone: tempSettings.timezone,
       })
 
       setCompanySettings({ ...tempSettings, logoUrl })
@@ -1115,13 +1314,35 @@ export default function SalesManagementApp() {
 
       toast({
         title: "Paramètres sauvegardés",
-        description: "Vos paramètres ont été mis à jour avec succès",
+        description: "Vos paramètres d'entreprise ont été mis à jour avec succès",
       })
     } catch (err) {
       console.error("Error saving settings:", err)
       toast({
         title: "Erreur",
         description: `Erreur lors de la sauvegarde: ${err instanceof Error ? err.message : "Erreur inconnue"}`,
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleSavePreferences = async () => {
+    if (!user) return
+
+    try {
+      // Save user preferences to localStorage for now
+      // In a real app, this would be saved to the database
+      localStorage.setItem(`user_preferences_${user.id}`, JSON.stringify(userPreferences))
+
+      toast({
+        title: "Préférences sauvegardées",
+        description: "Vos préférences utilisateur ont été mises à jour",
+      })
+    } catch (err) {
+      console.error("Error saving preferences:", err)
+      toast({
+        title: "Erreur",
+        description: "Erreur lors de la sauvegarde des préférences",
         variant: "destructive",
       })
     }
@@ -1313,7 +1534,7 @@ export default function SalesManagementApp() {
             <nav className="flex items-center space-x-4" role="navigation" aria-label="Navigation principale">
               <div className="hidden sm:flex items-center space-x-2 text-sm text-muted-foreground">
                 <User className="w-4 h-4" aria-hidden="true" />
-                <span>{companySettings.adminName}</span>
+                <span>{user?.email}</span>
               </div>
 
               {/* Desktop Navigation */}
@@ -1439,7 +1660,7 @@ export default function SalesManagementApp() {
                   {/* Mobile Admin Info */}
                   <div className="flex items-center space-x-2 text-sm text-muted-foreground pb-4 border-b border-slate-200 dark:border-slate-700">
                     <User className="w-4 h-4" aria-hidden="true" />
-                    <span>{companySettings.adminName}</span>
+                    <span>{user?.email}</span>
                   </div>
 
                   {/* Mobile Navigation Buttons */}
@@ -1619,6 +1840,7 @@ export default function SalesManagementApp() {
               resetInvoiceForm={resetInvoiceForm}
               printInvoice={printInvoice}
               handleDeleteInvoice={handleDeleteInvoice}
+              isSubmitting={isSubmittingInvoice}
             />
           </div>
         ) : (
