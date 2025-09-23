@@ -3,38 +3,7 @@
 import React from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Smartphone, ShoppingCart, DollarSign, Package, AlertTriangle, BarChart3 } from "lucide-react"
-
-interface Sale {
-  id: string
-  nom_prenom_client: string
-  numero_telephone: string
-  date_vente: string
-  modele: string
-  marque: string
-  imei_telephone: string
-  prix: number
-  created_at?: string
-}
-
-interface Product {
-  id: string
-  nom_produit: string
-  marque: string
-  modele: string
-  prix_unitaire: number
-  quantite_stock: number
-  description?: string
-  photo_url?: string
-  imei_telephone?: string
-  provenance?: string
-  created_at?: string
-}
-
-interface CompanySettings {
-  companyName: string
-  adminName: string
-  logoUrl: string
-}
+import type { Sale, Product, CompanySettings } from "@/lib/types"
 
 interface DashboardViewProps {
   totalVentes: number
@@ -216,7 +185,7 @@ export const DashboardView = React.memo(function DashboardView({
                       <div>
                         <p className="font-semibold text-gray-800">{product.nom_produit}</p>
                         <p className="text-sm text-gray-600">
-                          {product.marque} {product.modele}
+                          {product.marque} {product.couleur}
                         </p>
                       </div>
                     </div>

@@ -57,64 +57,8 @@ import { SalesView } from "@/components/sales/sales-view"
 import { InvoicesView } from "@/components/invoices/invoices-view"
 import { SettingsView } from "@/components/settings/settings-view"
 import { LoadingPage, LoadingCard } from "@/components/ui/loading"
+import type { Sale, Product, Provenance, CompanySettings, Invoice, InvoiceItem } from "@/lib/types"
 
-interface Sale {
-  id: string
-  nom_prenom_client: string
-  numero_telephone: string
-  date_vente: string
-  modele: string
-  marque: string
-  imei_telephone: string
-  prix: number
-  created_at?: string
-  updated_at?: string
-}
-
-interface Product {
-  id: string
-  nom_produit: string
-  marque: string
-  modele: string
-  prix_unitaire: number
-  quantite_stock: number
-  description?: string
-  photo_url?: string
-  imei_telephone?: string
-  provenance?: string
-  created_at?: string
-  updated_at?: string
-}
-
-interface Provenance {
-  id: string
-  nom_provenance: string
-  description?: string
-  pays_origine?: string
-  contact_fournisseur?: string
-  email_fournisseur?: string
-  telephone_fournisseur?: string
-  adresse_fournisseur?: string
-  created_at?: string
-  updated_at?: string
-}
-
-interface CompanySettings {
-  id: string
-  nom_compagnie: string
-  nom_admin: string
-  logo_url?: string
-  email: string
-  phone: string
-  address: string
-  website: string
-  tax_id: string
-  currency: string
-  language: string
-  timezone: string
-  created_at?: string
-  updated_at?: string
-}
 
 interface UserPreferences {
   emailNotifications: boolean
@@ -124,34 +68,6 @@ interface UserPreferences {
   dataExport: boolean
 }
 
-interface Invoice {
-  id: string
-  invoice_number: string
-  client_name: string
-  client_email?: string
-  client_phone?: string
-  client_address?: string
-  invoice_date: string
-  due_date?: string
-  subtotal: number
-  tax_rate: number
-  tax_amount: number
-  total_amount: number
-  status: "draft" | "sent" | "paid" | "overdue"
-  notes?: string
-  created_at: string
-  updated_at: string
-}
-
-interface InvoiceItem {
-  id: string
-  invoice_id: string
-  product_name: string
-  description?: string
-  quantity: number
-  unit_price: number
-  total_price: number
-}
 
 const PHONE_BRANDS = [
   "Apple",
@@ -198,17 +114,18 @@ export default function SalesManagementApp() {
     client_phone: "",
     client_address: "",
     due_date: "",
-    tax_rate: "20",
+    tax_rate: "18",
+    payment_status: "unpaid" as "unpaid" | "paid" | "refunded",
     notes: "",
   })
-  const [invoiceItems, setInvoiceItems] = useState([{ product_name: "", description: "", quantity: 1, unit_price: 0 }])
+  const [invoiceItems, setInvoiceItems] = useState([{ product_name: "", imei: "", marque: "", modele: "", provenance: "", quantity: 1, unit_price: 0 }])
 
   const [showAddProductForm, setShowAddProductForm] = useState(false)
   const [editingProductId, setEditingProductId] = useState<string | null>(null)
   const [productFormData, setProductFormData] = useState({
     nom_produit: "",
     marque: "",
-    modele: "",
+    couleur: "",
     prix_unitaire: "",
     quantite_stock: "",
     description: "",
@@ -218,15 +135,16 @@ export default function SalesManagementApp() {
   const [productPhoto, setProductPhoto] = useState<File | null>(null)
   const [productPhotoPreview, setProductPhotoPreview] = useState<string | null>(null)
 
-  const [companySettings, setCompanySettings] = useState({
-    companyName: "VentesPro",
-    adminName: "Administrateur",
-    logoUrl: "",
+  const [companySettings, setCompanySettings] = useState<CompanySettings>({
+    id: "",
+    nom_compagnie: "VentesPro",
+    nom_admin: "Administrateur",
+    logo_url: "",
     email: "",
     phone: "",
     address: "",
     website: "",
-    taxId: "",
+    tax_id: "",
     currency: "XOF",
     language: "fr",
     timezone: "Africa/Dakar",
@@ -239,7 +157,7 @@ export default function SalesManagementApp() {
     dataExport: true,
   })
   const [isEditingSettings, setIsEditingSettings] = useState(false)
-  const [tempSettings, setTempSettings] = useState(companySettings)
+  const [tempSettings, setTempSettings] = useState<CompanySettings>(companySettings)
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
 
@@ -257,6 +175,7 @@ export default function SalesManagementApp() {
     nom_prenom_client: "",
     numero_telephone: "",
     date_vente: "",
+    nom_produit: "",
     modele: "",
     marque: "",
     imei_telephone: "",
@@ -270,6 +189,12 @@ export default function SalesManagementApp() {
     subMessage: "",
   })
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [invoicePreview, setInvoicePreview] = useState<Invoice | null>(null)
+  const [showInvoicePreview, setShowInvoicePreview] = useState(false)
+
+  // Invoice filters
+  const [invoiceSearchTerm, setInvoiceSearchTerm] = useState("")
+  const [invoiceStatusFilter, setInvoiceStatusFilter] = useState("")
 
   const supabase = createClient()
 
@@ -444,32 +369,22 @@ export default function SalesManagementApp() {
           throw settingsResponse.error
         }
         if (settingsResponse.data) {
-          setCompanySettings({
-            companyName: settingsResponse.data.nom_compagnie,
-            adminName: settingsResponse.data.nom_admin,
-            logoUrl: settingsResponse.data.logo_url || "",
+          const loadedSettings: CompanySettings = {
+            id: settingsResponse.data.id,
+            nom_compagnie: settingsResponse.data.nom_compagnie,
+            nom_admin: settingsResponse.data.nom_admin,
+            logo_url: settingsResponse.data.logo_url || "",
             email: settingsResponse.data.email || "",
             phone: settingsResponse.data.phone || "",
             address: settingsResponse.data.address || "",
             website: settingsResponse.data.website || "",
-            taxId: settingsResponse.data.tax_id || "",
+            tax_id: settingsResponse.data.tax_id || "",
             currency: settingsResponse.data.currency || "XOF",
             language: settingsResponse.data.language || "fr",
             timezone: settingsResponse.data.timezone || "Africa/Dakar",
-          })
-          setTempSettings({
-            companyName: settingsResponse.data.nom_compagnie,
-            adminName: settingsResponse.data.nom_admin,
-            logoUrl: settingsResponse.data.logo_url || "",
-            email: settingsResponse.data.email || "",
-            phone: settingsResponse.data.phone || "",
-            address: settingsResponse.data.address || "",
-            website: settingsResponse.data.website || "",
-            taxId: settingsResponse.data.tax_id || "",
-            currency: settingsResponse.data.currency || "XOF",
-            language: settingsResponse.data.language || "fr",
-            timezone: settingsResponse.data.timezone || "Africa/Dakar",
-          })
+          }
+          setCompanySettings(loadedSettings)
+          setTempSettings(loadedSettings)
           setLogoPreview(settingsResponse.data.logo_url || null)
         }
       } catch (err) {
@@ -525,6 +440,33 @@ export default function SalesManagementApp() {
           })
           return
         }
+
+        // Validate stock availability
+        if (item.product_name.trim()) {
+          const product = products.find(p =>
+            p.nom_produit === item.product_name &&
+            p.marque === item.marque &&
+            p.couleur === item.modele
+          )
+
+          if (!product) {
+            toast({
+              title: "Erreur de validation",
+              description: `Article ${i + 1}: Produit "${item.product_name}" non trouvé dans l'inventaire`,
+              variant: "destructive",
+            })
+            return
+          }
+
+          if (product.quantite_stock < item.quantity) {
+            toast({
+              title: "Erreur de validation",
+              description: `Article ${i + 1}: Stock insuffisant pour "${item.product_name}". Disponible: ${product.quantite_stock}, Demandé: ${item.quantity}`,
+              variant: "destructive",
+            })
+            return
+          }
+        }
       }
 
       const subtotal = invoiceItems.reduce((sum, item) => sum + item.quantity * item.unit_price, 0)
@@ -532,85 +474,192 @@ export default function SalesManagementApp() {
       const tax_amount = subtotal * tax_rate
       const total_amount = subtotal + tax_amount
 
-      console.log("Creating invoice with data:", {
-        client_name: invoiceFormData.client_name,
-        subtotal,
-        tax_rate,
-        total_amount,
-        items_count: invoiceItems.length,
-        user_id: user.id
-      })
+      const isEditing = !!editingInvoiceId
 
-      // Générer le numéro de facture de manière simplifiée
-      const timestamp = Date.now()
-      const invoiceNumber = `INV-${timestamp.toString().slice(-6)}`
-
-      // Créer la facture
-      const invoiceData = {
-        invoice_number: invoiceNumber,
-        client_name: invoiceFormData.client_name.trim(),
-        client_email: invoiceFormData.client_email?.trim() || null,
-        client_phone: invoiceFormData.client_phone?.trim() || null,
-        client_address: invoiceFormData.client_address?.trim() || null,
-        invoice_date: new Date().toISOString(),
-        due_date: invoiceFormData.due_date || null,
-        subtotal: Math.round(subtotal * 100) / 100, // Arrondir à 2 décimales
-        tax_rate: Number.parseFloat(invoiceFormData.tax_rate),
-        tax_amount: Math.round(tax_amount * 100) / 100,
-        total_amount: Math.round(total_amount * 100) / 100,
-        notes: invoiceFormData.notes?.trim() || null,
-        user_id: user.id,
-      }
-
-      console.log("Inserting invoice:", invoiceData)
-
-      const { data: insertedInvoice, error: invoiceError } = await supabase
-        .from("invoices")
-        .insert([invoiceData])
-        .select()
-        .single()
-
-      if (invoiceError) {
-        console.error("Invoice insertion error:", invoiceError)
-        throw new Error(`Erreur lors de la création de la facture: ${invoiceError.message}`)
-      }
-
-      if (!insertedInvoice) {
-        throw new Error("La facture n'a pas été créée correctement")
-      }
-
-      console.log("Invoice created successfully:", insertedInvoice)
-
-      // Créer les articles de la facture
-      const validItems = invoiceItems.filter(item => item.product_name.trim())
-      if (validItems.length > 0) {
-        const itemsToInsert = validItems.map((item) => ({
-          invoice_id: insertedInvoice.id,
-          product_name: item.product_name.trim(),
-          description: item.description?.trim() || null,
-          quantity: item.quantity,
-          unit_price: Math.round(item.unit_price * 100) / 100,
-          total_price: Math.round((item.quantity * item.unit_price) * 100) / 100,
-          user_id: user.id,
-        }))
-
-        console.log("Inserting invoice items:", itemsToInsert)
-
-        const { error: itemsError } = await supabase
-          .from("invoice_items")
-          .insert(itemsToInsert)
-
-        if (itemsError) {
-          console.error("Invoice items insertion error:", itemsError)
-          // Ne pas échouer complètement si les articles ne peuvent pas être insérés
-          toast({
-            title: "Avertissement",
-            description: "La facture a été créée mais certains articles n'ont pas pu être ajoutés",
-            variant: "default",
-          })
-        } else {
-          console.log("Invoice items created successfully")
+      if (isEditing) {
+        // Update existing invoice
+        const invoiceData = {
+          client_name: invoiceFormData.client_name.trim(),
+          client_email: invoiceFormData.client_email?.trim() || null,
+          client_phone: invoiceFormData.client_phone?.trim() || null,
+          client_address: invoiceFormData.client_address?.trim() || null,
+          due_date: invoiceFormData.due_date || null,
+          subtotal: Math.round(subtotal * 100) / 100,
+          tax_rate: Number.parseFloat(invoiceFormData.tax_rate),
+          tax_amount: Math.round(tax_amount * 100) / 100,
+          total_amount: Math.round(total_amount * 100) / 100,
+          notes: invoiceFormData.notes?.trim() || null,
         }
+
+        const { error: invoiceError } = await supabase
+          .from("invoices")
+          .update(invoiceData)
+          .eq("id", editingInvoiceId)
+          .eq("user_id", user.id)
+
+        if (invoiceError) {
+          throw new Error(`Erreur lors de la modification de la facture: ${invoiceError.message}`)
+        }
+
+        // Delete existing items and insert new ones
+        await supabase
+          .from("invoice_items")
+          .delete()
+          .eq("invoice_id", editingInvoiceId)
+          .eq("user_id", user.id)
+
+        const validItems = invoiceItems.filter(item => item.product_name.trim())
+        if (validItems.length > 0) {
+          const itemsToInsert = validItems.map((item) => ({
+            invoice_id: editingInvoiceId,
+            product_name: item.product_name.trim(),
+            imei: item.imei?.trim() || null,
+            quantity: item.quantity,
+            unit_price: Math.round(item.unit_price * 100) / 100,
+            total_price: Math.round((item.quantity * item.unit_price) * 100) / 100,
+          }))
+
+          const { error: itemsError } = await supabase
+            .from("invoice_items")
+            .insert(itemsToInsert)
+
+          if (itemsError) {
+            toast({
+              title: "Avertissement",
+              description: "La facture a été modifiée mais certains articles n'ont pas pu être mis à jour",
+              variant: "default",
+            })
+          }
+        }
+
+        setSuccessModal({
+          isOpen: true,
+          message: "Facture modifiée avec succès!",
+          subMessage: "Les modifications ont été sauvegardées.",
+        })
+
+        toast({
+          title: "Succès",
+          description: "Facture modifiée avec succès",
+        })
+      } else {
+        // Create new invoice
+        console.log("Creating invoice with data:", {
+          client_name: invoiceFormData.client_name,
+          subtotal,
+          tax_rate,
+          total_amount,
+          items_count: invoiceItems.length,
+          user_id: user.id
+        })
+
+        // Générer le numéro de facture de manière simplifiée
+        const timestamp = Date.now()
+        const invoiceNumber = `INV-${timestamp.toString().slice(-6)}`
+
+        // Créer la facture
+        const invoiceData = {
+          invoice_number: invoiceNumber,
+          client_name: invoiceFormData.client_name.trim(),
+          client_email: invoiceFormData.client_email?.trim() || null,
+          client_phone: invoiceFormData.client_phone?.trim() || null,
+          client_address: invoiceFormData.client_address?.trim() || null,
+          invoice_date: new Date().toISOString(),
+          due_date: invoiceFormData.due_date || null,
+          subtotal: Math.round(subtotal * 100) / 100, // Arrondir à 2 décimales
+          tax_rate: Number.parseFloat(invoiceFormData.tax_rate),
+          tax_amount: Math.round(tax_amount * 100) / 100,
+          total_amount: Math.round(total_amount * 100) / 100,
+          payment_status: invoiceFormData.payment_status,
+          notes: invoiceFormData.notes?.trim() || null,
+          user_id: user.id,
+        }
+
+        // Create invoice with transaction safety
+        const insertedInvoice = await executeTransactionWithRollback(
+          // Main operation: create invoice and items
+          async () => {
+            console.log("Inserting invoice:", invoiceData)
+
+            const { data: invoice, error: invoiceError } = await supabase
+              .from("invoices")
+              .insert([invoiceData])
+              .select()
+              .single()
+
+            if (invoiceError) {
+              console.error("Invoice insertion error:", invoiceError)
+              throw new Error(`Erreur lors de la création de la facture: ${invoiceError.message}`)
+            }
+
+            if (!invoice) {
+              throw new Error("La facture n'a pas été créée correctement")
+            }
+
+            console.log("Invoice created successfully:", invoice)
+
+            // Créer les articles de la facture
+            const validItems = invoiceItems.filter(item => item.product_name.trim())
+            if (validItems.length > 0) {
+              const itemsToInsert = validItems.map((item) => ({
+                invoice_id: invoice.id,
+                product_name: item.product_name.trim(),
+                imei: item.imei?.trim() || null,
+                quantity: item.quantity,
+                unit_price: Math.round(item.unit_price * 100) / 100,
+                total_price: Math.round((item.quantity * item.unit_price) * 100) / 100,
+              }))
+
+              console.log("Inserting invoice items:", itemsToInsert)
+
+              const { error: itemsError } = await supabase
+                .from("invoice_items")
+                .insert(itemsToInsert)
+
+              if (itemsError) {
+                console.error("Invoice items insertion error:", itemsError)
+                throw new Error(`Erreur lors de l'ajout des articles: ${itemsError.message}`)
+              }
+
+              console.log("Invoice items created successfully")
+            }
+
+            return invoice
+          },
+          // Rollback operation: delete invoice and items if stock deduction fails
+          async (createdInvoice: any) => {
+            console.log("Rolling back invoice creation:", createdInvoice.id)
+
+            // Delete invoice items first
+            await supabase
+              .from("invoice_items")
+              .delete()
+              .eq("invoice_id", createdInvoice.id)
+              .eq("user_id", user.id)
+
+            // Delete invoice
+            await supabase
+              .from("invoices")
+              .delete()
+              .eq("id", createdInvoice.id)
+              .eq("user_id", user.id)
+          }
+        )
+
+        // Deduct quantities from inventory immediately upon invoice creation
+        const validItems = invoiceItems.filter(item => item.product_name.trim())
+        await deductFromInventory(validItems, user.id)
+
+        setSuccessModal({
+          isOpen: true,
+          message: "Facture créée avec succès!",
+          subMessage: `Facture ${invoiceNumber} ajoutée à votre système.`,
+        })
+
+        toast({
+          title: "Succès",
+          description: `Facture ${invoiceNumber} créée avec succès`,
+        })
       }
 
       // Recharger les factures
@@ -625,25 +674,16 @@ export default function SalesManagementApp() {
         client_address: "",
         due_date: "",
         tax_rate: "18",
+        payment_status: "unpaid",
         notes: "",
       })
-      setInvoiceItems([{ product_name: "", description: "", quantity: 1, unit_price: 0 }])
-
-      setSuccessModal({
-        isOpen: true,
-        message: "Facture créée avec succès!",
-        subMessage: `Facture ${invoiceNumber} ajoutée à votre système.`,
-      })
-
-      toast({
-        title: "Succès",
-        description: `Facture ${invoiceNumber} créée avec succès`,
-      })
+      setInvoiceItems([{ product_name: "", imei: "", marque: "", modele: "", provenance: "", quantity: 1, unit_price: 0 }])
+      setEditingInvoiceId(null)
 
     } catch (error) {
-      console.error("Error adding invoice:", error)
+      console.error("Error saving invoice:", error)
 
-      let errorMessage = "Erreur lors de l'ajout de la facture"
+      let errorMessage = "Erreur lors de la sauvegarde de la facture"
       if (error instanceof Error) {
         errorMessage = error.message
       }
@@ -656,7 +696,7 @@ export default function SalesManagementApp() {
     } finally {
       setIsSubmittingInvoice(false)
     }
-  }, [invoiceFormData, invoiceItems, toast, user, fetchInvoices])
+  }, [invoiceFormData, invoiceItems, toast, user, fetchInvoices, editingInvoiceId])
 
   const handleDeleteInvoice = async (id: string) => {
     if (!user) return
@@ -693,15 +733,16 @@ export default function SalesManagementApp() {
       client_phone: "",
       client_address: "",
       due_date: "",
-      tax_rate: "20",
+      tax_rate: "18",
+      payment_status: "unpaid",
       notes: "",
     })
-    setInvoiceItems([{ product_name: "", description: "", quantity: 1, unit_price: 0 }])
+    setInvoiceItems([{ product_name: "", imei: "", marque: "", modele: "", provenance: "", quantity: 1, unit_price: 0 }])
     setEditingInvoiceId(null)
   }
 
   const addInvoiceItem = () => {
-    setInvoiceItems([...invoiceItems, { product_name: "", description: "", quantity: 1, unit_price: 0 }])
+    setInvoiceItems([...invoiceItems, { product_name: "", imei: "", marque: "", modele: "", provenance: "", quantity: 1, unit_price: 0 }])
   }
 
   const removeInvoiceItem = (index: number) => {
@@ -728,98 +769,735 @@ export default function SalesManagementApp() {
     })
   }, [])
 
+  const handleProductSelect = useCallback((index: number, product: Product) => {
+    setInvoiceItems((prev) => {
+      const updated = [...prev]
+      updated[index] = {
+        ...updated[index],
+        product_name: product.nom_produit,
+        marque: product.marque,
+        modele: product.couleur,
+        imei: product.imei_telephone || "",
+        provenance: product.provenance || "",
+        unit_price: product.prix_unitaire,
+        quantity: 1, // Default to 1, user can change
+      }
+      return updated
+    })
+  }, [])
+
+  // Transaction wrapper for atomic operations with rollback
+  const executeTransactionWithRollback = useCallback(async (
+    operation: () => Promise<any>,
+    rollback: (result: any) => Promise<void>
+  ): Promise<any> => {
+    let result: any = null;
+
+    try {
+      // Execute the main operation
+      result = await operation();
+      return result;
+    } catch (error) {
+      // If operation fails, execute rollback
+      console.error("Transaction failed, executing rollback:", error);
+
+      if (result) {
+        try {
+          await rollback(result);
+          console.log("Rollback completed successfully");
+        } catch (rollbackError) {
+          console.error("Rollback failed:", rollbackError);
+          toast({
+            title: "Erreur critique",
+            description: "Une erreur s'est produite et la restauration automatique a échoué. Contactez le support.",
+            variant: "destructive",
+          });
+        }
+      }
+
+      throw error;
+    }
+  }, [toast]);
+
+  const deductFromInventory = useCallback(async (invoiceItems: any[], userId: string) => {
+    try {
+      // Group items by product details to find matching products
+      for (const item of invoiceItems) {
+        if (item.product_name && item.quantity > 0) {
+          // Find products that match the invoice item details
+          const { data: matchingProducts, error } = await supabase
+            .from("products")
+            .select("*")
+            .eq("user_id", userId)
+            .eq("nom_produit", item.product_name)
+            .eq("marque", item.marque || "")
+            .eq("couleur", item.modele || "") // Use couleur instead of modele
+            .gte("quantite_stock", item.quantity) // Ensure enough stock
+            .order("created_at", { ascending: true }) // FIFO - first in, first out
+
+          if (error) {
+            console.error("Error finding matching products:", error)
+            continue
+          }
+
+          if (matchingProducts && matchingProducts.length > 0) {
+            // Use the first matching product (FIFO)
+            const productToUpdate = matchingProducts[0]
+            const newStockQuantity = productToUpdate.quantite_stock - item.quantity
+
+            const { error: updateError } = await supabase
+              .from("products")
+              .update({
+                quantite_stock: newStockQuantity,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", productToUpdate.id)
+              .eq("user_id", userId)
+
+            if (updateError) {
+              console.error("Error updating product stock:", updateError)
+              toast({
+                title: "Avertissement",
+                description: `Impossible de mettre à jour le stock pour ${item.product_name}`,
+                variant: "default",
+              })
+            } else {
+              console.log(`Deducted ${item.quantity} from ${productToUpdate.nom_produit} stock. New stock: ${newStockQuantity}`)
+            }
+          } else {
+            console.warn(`No matching product found for ${item.product_name} with sufficient stock`)
+            toast({
+              title: "Avertissement",
+              description: `Stock insuffisant pour ${item.product_name}`,
+              variant: "default",
+            })
+          }
+        }
+      }
+
+      // Refresh products data
+      const { data: updatedProducts, error: refreshError } = await supabase
+        .from("products")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+
+      if (!refreshError && updatedProducts) {
+        setProducts(updatedProducts)
+      }
+    } catch (error) {
+      console.error("Error in deductFromInventory:", error)
+      toast({
+        title: "Erreur",
+        description: "Erreur lors de la mise à jour du stock",
+        variant: "destructive",
+      })
+    }
+  }, [supabase, toast])
+
+  const handleEditInvoice = async (invoiceId: string) => {
+    const invoice = invoices.find(inv => inv.id === invoiceId)
+    if (!invoice) return
+
+    // Populate form data
+    setInvoiceFormData({
+      client_name: invoice.client_name,
+      client_email: invoice.client_email || "",
+      client_phone: invoice.client_phone || "",
+      client_address: invoice.client_address || "",
+      due_date: invoice.due_date ? new Date(invoice.due_date).toISOString().split('T')[0] : "",
+      tax_rate: invoice.tax_rate.toString(),
+      payment_status: invoice.payment_status,
+      notes: invoice.notes || "",
+    })
+
+    // Populate invoice items
+    if (invoice.invoice_items) {
+      setInvoiceItems(invoice.invoice_items.map(item => ({
+        product_name: item.product_name,
+        imei: item.imei || "",
+        marque: item.marque || "",
+        modele: item.modele || "",
+        provenance: item.provenance || "",
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+      })))
+    }
+
+    setEditingInvoiceId(invoiceId)
+    setShowAddInvoiceForm(true)
+  }
+
+  const previewInvoice = (invoice: Invoice) => {
+    setInvoicePreview(invoice)
+    setShowInvoicePreview(true)
+  }
+
   const printInvoice = (invoice: Invoice) => {
     const printWindow = window.open("", "_blank")
     if (!printWindow) return
 
-    const invoiceItemsForPrint = invoiceItems.filter((item) => item.product_name)
+    // Use the invoice's stored items from database, not the form state
+    const invoiceItemsForPrint = invoice.invoice_items || []
+
+    // Get payment status styling
+    const getStatusStyle = (status: string) => {
+      switch (status) {
+        case 'paid':
+          return { bg: '#10b981', color: '#ffffff', text: 'PAYÉE' }
+        case 'unpaid':
+          return { bg: '#f59e0b', color: '#ffffff', text: 'NON PAYÉE' }
+        case 'refunded':
+          return { bg: '#6b7280', color: '#ffffff', text: 'REMBOURSÉE' }
+        default:
+          return { bg: '#6b7280', color: '#ffffff', text: 'BROUILLON' }
+      }
+    }
+
+    const statusStyle = getStatusStyle(invoice.payment_status)
 
     printWindow.document.write(`
       <!DOCTYPE html>
-      <html>
+      <html lang="fr">
         <head>
-          <title>Facture ${invoice.invoice_number}</title>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Facture ${invoice.invoice_number} - ${companySettings.nom_compagnie}</title>
+          <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
           <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            .header { text-align: center; margin-bottom: 30px; }
-            .invoice-info { display: flex; justify-content: space-between; margin-bottom: 30px; }
-            .client-info, .company-info { width: 45%; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            th { background-color: #f2f2f2; }
-            .totals { text-align: right; margin-top: 20px; }
-            .total-row { font-weight: bold; }
-            @media print { body { margin: 0; } }
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+
+            body {
+              font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              line-height: 1.6;
+              color: #1a202c;
+              background: #f7fafc;
+              -webkit-font-smoothing: antialiased;
+              -moz-osx-font-smoothing: grayscale;
+            }
+
+            .invoice-container {
+              max-width: 800px;
+              margin: 0 auto;
+              background: white;
+              box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+              border-radius: 12px;
+              overflow: hidden;
+            }
+
+            .header {
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: white;
+              padding: 40px 50px;
+              position: relative;
+              overflow: hidden;
+            }
+
+            .header::before {
+              content: '';
+              position: absolute;
+              top: -50%;
+              right: -50%;
+              width: 200%;
+              height: 200%;
+              background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+              animation: pulse 4s ease-in-out infinite;
+            }
+
+            @keyframes pulse {
+              0%, 100% { opacity: 0.5; }
+              50% { opacity: 1; }
+            }
+
+            .header-content {
+              position: relative;
+              z-index: 1;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+            }
+
+            .invoice-title-section {
+              flex: 1;
+            }
+
+            .invoice-title {
+              font-size: 36px;
+              font-weight: 700;
+              margin-bottom: 8px;
+              letter-spacing: -0.025em;
+            }
+
+            .invoice-number {
+              font-size: 18px;
+              font-weight: 500;
+              opacity: 0.9;
+              background: rgba(255, 255, 255, 0.2);
+              padding: 6px 12px;
+              border-radius: 20px;
+              display: inline-block;
+              backdrop-filter: blur(10px);
+            }
+
+            .status-badge {
+              background: ${statusStyle.bg};
+              color: ${statusStyle.color};
+              padding: 8px 16px;
+              border-radius: 20px;
+              font-weight: 600;
+              font-size: 14px;
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+              box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            }
+
+            .invoice-meta {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 40px;
+              margin-top: 40px;
+              padding: 30px 50px;
+              background: #f8fafc;
+              border-bottom: 1px solid #e2e8f0;
+            }
+
+            .company-info h3,
+            .client-info h3 {
+              font-size: 14px;
+              font-weight: 600;
+              color: #718096;
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+              margin-bottom: 12px;
+            }
+
+            .company-info p,
+            .client-info p {
+              margin-bottom: 4px;
+              color: #2d3748;
+              font-weight: 500;
+            }
+
+            .company-info .company-name {
+              font-size: 20px;
+              font-weight: 700;
+              color: #1a202c;
+              margin-bottom: 8px;
+            }
+
+            .client-info .client-name {
+              font-size: 18px;
+              font-weight: 600;
+              color: #2b6cb0;
+              margin-bottom: 8px;
+            }
+
+            .invoice-details {
+              padding: 30px 50px;
+              background: white;
+            }
+
+            .details-grid {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+              gap: 20px;
+              margin-bottom: 30px;
+            }
+
+            .detail-item {
+              background: #f7fafc;
+              padding: 16px;
+              border-radius: 8px;
+              border: 1px solid #e2e8f0;
+            }
+
+            .detail-label {
+              font-size: 12px;
+              font-weight: 600;
+              color: #718096;
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+              margin-bottom: 4px;
+            }
+
+            .detail-value {
+              font-size: 16px;
+              font-weight: 600;
+              color: #2d3748;
+            }
+
+            .products-section {
+              margin-bottom: 30px;
+            }
+
+            .section-title {
+              font-size: 20px;
+              font-weight: 600;
+              color: #2d3748;
+              margin-bottom: 20px;
+              display: flex;
+              align-items: center;
+              gap: 10px;
+            }
+
+            .section-title::before {
+              content: '';
+              width: 4px;
+              height: 20px;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              border-radius: 2px;
+            }
+
+            .products-table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-bottom: 20px;
+              border-radius: 8px;
+              overflow: hidden;
+              box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            }
+
+            .products-table thead {
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: white;
+            }
+
+            .products-table th {
+              padding: 16px 20px;
+              text-align: left;
+              font-weight: 600;
+              font-size: 14px;
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+            }
+
+            .products-table tbody tr {
+              border-bottom: 1px solid #e2e8f0;
+              transition: background-color 0.2s ease;
+            }
+
+            .products-table tbody tr:hover {
+              background: #f8fafc;
+            }
+
+            .products-table tbody tr:last-child {
+              border-bottom: none;
+            }
+
+            .products-table td {
+              padding: 16px 20px;
+              vertical-align: top;
+            }
+
+            .product-name {
+              font-weight: 600;
+              color: #2d3748;
+              margin-bottom: 4px;
+            }
+
+            .product-details {
+              font-size: 14px;
+              color: #718096;
+              line-height: 1.4;
+            }
+
+            .product-details div {
+              margin-bottom: 2px;
+            }
+
+            .quantity-badge {
+              background: #e6fffa;
+              color: #065f46;
+              padding: 4px 8px;
+              border-radius: 12px;
+              font-size: 12px;
+              font-weight: 600;
+              display: inline-block;
+            }
+
+            .price-cell {
+              font-weight: 600;
+              color: #2d3748;
+              text-align: right;
+            }
+
+            .totals-section {
+              background: #f8fafc;
+              border-radius: 8px;
+              padding: 24px;
+              margin-top: 30px;
+            }
+
+            .totals-title {
+              font-size: 18px;
+              font-weight: 600;
+              color: #2d3748;
+              margin-bottom: 16px;
+            }
+
+            .totals-row {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              padding: 8px 0;
+              border-bottom: 1px solid #e2e8f0;
+            }
+
+            .totals-row:last-child {
+              border-bottom: none;
+              border-top: 2px solid #667eea;
+              padding-top: 16px;
+              margin-top: 8px;
+            }
+
+            .totals-row.total {
+              font-size: 20px;
+              font-weight: 700;
+              color: #667eea;
+            }
+
+            .totals-label {
+              font-weight: 500;
+              color: #4a5568;
+            }
+
+            .totals-value {
+              font-weight: 600;
+              color: #2d3748;
+            }
+
+            .notes-section {
+              margin-top: 30px;
+              padding: 20px;
+              background: #fef5e7;
+              border-radius: 8px;
+              border-left: 4px solid #f59e0b;
+            }
+
+            .notes-title {
+              font-size: 16px;
+              font-weight: 600;
+              color: #92400e;
+              margin-bottom: 8px;
+            }
+
+            .notes-content {
+              color: #78350f;
+              line-height: 1.6;
+            }
+
+            .footer {
+              background: #1a202c;
+              color: white;
+              padding: 20px 50px;
+              text-align: center;
+              font-size: 14px;
+            }
+
+            .footer p {
+              margin-bottom: 4px;
+            }
+
+            .footer .company-name {
+              font-weight: 600;
+            }
+
+            @media print {
+              body {
+                background: white !important;
+              }
+
+              .invoice-container {
+                box-shadow: none !important;
+                margin: 0 !important;
+                max-width: none !important;
+              }
+
+              .header::before {
+                animation: none !important;
+              }
+
+              .products-table tbody tr:hover {
+                background: transparent !important;
+              }
+            }
+
+            @media (max-width: 768px) {
+              .header {
+                padding: 30px 20px;
+              }
+
+              .header-content {
+                flex-direction: column;
+                gap: 20px;
+                text-align: center;
+              }
+
+              .invoice-meta {
+                grid-template-columns: 1fr;
+                gap: 20px;
+                padding: 20px;
+              }
+
+              .invoice-details {
+                padding: 20px;
+              }
+
+              .products-table {
+                font-size: 14px;
+              }
+
+              .products-table th,
+              .products-table td {
+                padding: 12px 8px;
+              }
+
+              .footer {
+                padding: 20px;
+              }
+            }
           </style>
         </head>
         <body>
-          <div class="header">
-            <h1>FACTURE</h1>
-            <h2>${invoice.invoice_number}</h2>
-          </div>
-          
-          <div class="invoice-info">
-            <div class="company-info">
-              <h3>${companySettings.companyName}</h3>
-              <p>Géré par: ${companySettings.adminName}</p>
+          <div class="invoice-container">
+            <!-- Header Section -->
+            <div class="header">
+              <div class="header-content">
+                <div class="invoice-title-section">
+                  <h1 class="invoice-title">Facture</h1>
+                  <div class="invoice-number">${invoice.invoice_number}</div>
+                </div>
+                <div class="status-badge">${statusStyle.text}</div>
+              </div>
             </div>
-            <div class="client-info">
-              <h3>Facturé à:</h3>
-              <p><strong>${invoice.client_name}</strong></p>
-              ${invoice.client_email ? `<p>Email: ${invoice.client_email}</p>` : ""}
-              ${invoice.client_phone ? `<p>Tél: ${invoice.client_phone}</p>` : ""}
-              ${invoice.client_address ? `<p>${invoice.client_address}</p>` : ""}
+
+            <!-- Company and Client Info -->
+            <div class="invoice-meta">
+              <div class="company-info">
+                <h3>Émis par</h3>
+                <div class="company-name">${companySettings.nom_compagnie}</div>
+                <p>Géré par: ${companySettings.nom_admin}</p>
+                ${companySettings.email ? `<p>Email: ${companySettings.email}</p>` : ""}
+                ${companySettings.phone ? `<p>Tél: ${companySettings.phone}</p>` : ""}
+                ${companySettings.address ? `<p>${companySettings.address}</p>` : ""}
+              </div>
+              <div class="client-info">
+                <h3>Facturé à</h3>
+                <div class="client-name">${invoice.client_name}</div>
+                ${invoice.client_email ? `<p>Email: ${invoice.client_email}</p>` : ""}
+                ${invoice.client_phone ? `<p>Tél: ${invoice.client_phone}</p>` : ""}
+                ${invoice.client_address ? `<p>${invoice.client_address.replace(/\n/g, '<br>')}</p>` : ""}
+              </div>
+            </div>
+
+            <!-- Invoice Details -->
+            <div class="invoice-details">
+              <div class="details-grid">
+                <div class="detail-item">
+                  <div class="detail-label">Date de facture</div>
+                  <div class="detail-value">${new Date(invoice.invoice_date).toLocaleDateString("fr-FR")}</div>
+                </div>
+                ${invoice.due_date ? `
+                  <div class="detail-item">
+                    <div class="detail-label">Date d'échéance</div>
+                    <div class="detail-value">${new Date(invoice.due_date).toLocaleDateString("fr-FR")}</div>
+                  </div>
+                ` : ""}
+                <div class="detail-item">
+                  <div class="detail-label">Numéro de facture</div>
+                  <div class="detail-value">${invoice.invoice_number}</div>
+                </div>
+                <div class="detail-item">
+                  <div class="detail-label">Statut</div>
+                  <div class="detail-value" style="color: ${statusStyle.bg}">${statusStyle.text}</div>
+                </div>
+              </div>
+
+              <!-- Products Section -->
+              <div class="products-section">
+                <h2 class="section-title">Articles</h2>
+                <table class="products-table">
+                  <thead>
+                    <tr>
+                      <th>Produit/Service</th>
+                      <th>Détails</th>
+                      <th>Quantité</th>
+                      <th>Prix unitaire</th>
+                      <th>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${invoiceItemsForPrint.map((item, index) => `
+                      <tr>
+                        <td>
+                          <div class="product-name">${item.product_name}</div>
+                        </td>
+                        <td>
+                          <div class="product-details">
+                            ${item.marque ? `<div><strong>Marque:</strong> ${item.marque}</div>` : ""}
+                            ${item.modele ? `<div><strong>Modèle:</strong> ${item.modele}</div>` : ""}
+                            ${item.imei ? `<div><strong>SN:</strong> ${item.imei}</div>` : ""}
+                            ${item.provenance ? `<div><strong>Provenance:</strong> ${item.provenance}</div>` : ""}
+                          </div>
+                        </td>
+                        <td>
+                          <span class="quantity-badge">${item.quantity}</span>
+                        </td>
+                        <td class="price-cell">${item.unit_price.toLocaleString("fr-FR")} FCFA</td>
+                        <td class="price-cell">${(item.quantity * item.unit_price).toLocaleString("fr-FR")} FCFA</td>
+                      </tr>
+                    `).join("")}
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Totals Section -->
+              <div class="totals-section">
+                <h3 class="totals-title">Récapitulatif</h3>
+                <div class="totals-row">
+                  <span class="totals-label">Sous-total</span>
+                  <span class="totals-value">${invoice.subtotal.toLocaleString("fr-FR")} FCFA</span>
+                </div>
+                <div class="totals-row">
+                  <span class="totals-label">TVA (${invoice.tax_rate}%)</span>
+                  <span class="totals-value">${invoice.tax_amount.toLocaleString("fr-FR")} FCFA</span>
+                </div>
+                <div class="totals-row total">
+                  <span class="totals-label">Total</span>
+                  <span class="totals-value">${invoice.total_amount.toLocaleString("fr-FR")} FCFA</span>
+                </div>
+              </div>
+
+              <!-- Notes Section -->
+              ${invoice.notes ? `
+                <div class="notes-section">
+                  <h3 class="notes-title">Notes</h3>
+                  <div class="notes-content">${invoice.notes.replace(/\n/g, '<br>')}</div>
+                </div>
+              ` : ""}
+            </div>
+
+            <!-- Footer -->
+            <div class="footer">
+              <p class="company-name">${companySettings.nom_compagnie}</p>
+              <p>Merci pour votre confiance • Facture générée le ${new Date().toLocaleDateString("fr-FR")}</p>
+              ${companySettings.website ? `<p>${companySettings.website}</p>` : ""}
             </div>
           </div>
-          
-          <p><strong>Date de facture:</strong> ${new Date(invoice.invoice_date).toLocaleDateString("fr-FR")}</p>
-          ${
-            invoice.due_date
-              ? `<p><strong>Date d'échéance:</strong> ${new Date(invoice.due_date).toLocaleDateString("fr-FR")}</p>`
-              : ""
-          }
-          
-          <table>
-            <thead>
-              <tr>
-                <th>Produit/Service</th>
-                <th>Description</th>
-                <th>Quantité</th>
-                <th>Prix unitaire</th>
-                <th>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${invoiceItemsForPrint
-                .map(
-                  (item) => `
-                <tr>
-                  <td>${item.product_name}</td>
-                  <td>${item.description || ""}</td>
-                  <td>${item.quantity}</td>
-                  <td>${item.unit_price.toLocaleString("fr-FR")} FCFA</td>
-                  <td>${(item.quantity * item.unit_price).toLocaleString("fr-FR")} FCFA</td>
-                </tr>
-              `,
-                )
-                .join("")}
-            </tbody>
-          </table>
-          
-          <div class="totals">
-            <p>Sous-total: ${invoice.subtotal.toLocaleString("fr-FR")} FCFA</p>
-            <p>TVA (${invoice.tax_rate}%): ${invoice.tax_amount.toLocaleString("fr-FR")} FCFA</p>
-            <p class="total-row">Total: ${invoice.total_amount.toLocaleString("fr-FR")} FCFA</p>
-          </div>
-          
-          ${invoice.notes ? `<div style="margin-top: 30px;"><strong>Notes:</strong><br>${invoice.notes}</div>` : ""}
-          
+
           <script>
             window.onload = function() {
-              window.print();
-              window.onafterprint = function() {
-                window.close();
-              }
+              // Small delay to ensure styles are loaded
+              setTimeout(function() {
+                window.print();
+                window.onafterprint = function() {
+                  window.close();
+                }
+              }, 100);
             }
           </script>
         </body>
@@ -855,8 +1533,17 @@ export default function SalesManagementApp() {
   const filteredProducts = products.filter(
     (product) =>
       product.nom_produit.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.modele.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.couleur.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.marque.toLowerCase().includes(searchTerm.toLowerCase()),
+  )
+
+  const filteredInvoices = invoices.filter(
+    (invoice) =>
+      invoice.client_name.toLowerCase().includes(invoiceSearchTerm.toLowerCase()) ||
+      invoice.invoice_number.toLowerCase().includes(invoiceSearchTerm.toLowerCase()),
+  ).filter(
+    (invoice) =>
+      invoiceStatusFilter === "" || invoice.payment_status === invoiceStatusFilter,
   )
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -953,7 +1640,7 @@ export default function SalesManagementApp() {
       const productData = {
         nom_produit: productFormData.nom_produit.trim(),
         marque: productFormData.marque.trim(),
-        modele: productFormData.modele.trim(),
+        couleur: productFormData.couleur.trim(),
         prix_unitaire: Number.parseFloat(productFormData.prix_unitaire),
         quantite_stock: Number.parseInt(productFormData.quantite_stock),
         description: productFormData.description.trim() || null,
@@ -982,7 +1669,7 @@ export default function SalesManagementApp() {
       setProductFormData({
         nom_produit: "",
         marque: "",
-        modele: "",
+        couleur: "",
         prix_unitaire: "",
         quantite_stock: "",
         description: "",
@@ -1014,7 +1701,7 @@ export default function SalesManagementApp() {
       setProductFormData({
         nom_produit: product.nom_produit,
         marque: product.marque,
-        modele: product.modele,
+        couleur: product.couleur,
         prix_unitaire: product.prix_unitaire.toString(),
         quantite_stock: product.quantite_stock.toString(),
         description: product.description || "",
@@ -1034,7 +1721,7 @@ export default function SalesManagementApp() {
       editingProductId &&
       productFormData.nom_produit &&
       productFormData.marque &&
-      productFormData.modele &&
+      productFormData.couleur &&
       productFormData.prix_unitaire &&
       productFormData.quantite_stock
     ) {
@@ -1079,7 +1766,7 @@ export default function SalesManagementApp() {
         setProductFormData({
           nom_produit: "",
           marque: "",
-          modele: "",
+          couleur: "",
           prix_unitaire: "",
           quantite_stock: "",
           description: "",
@@ -1101,7 +1788,7 @@ export default function SalesManagementApp() {
     setProductFormData({
       nom_produit: "",
       marque: "",
-      modele: "",
+      couleur: "",
       prix_unitaire: "",
       quantite_stock: "",
       description: "",
@@ -1170,7 +1857,16 @@ export default function SalesManagementApp() {
   const handleEditVente = (id: string) => {
     const vente = ventes.find((v) => v.id === id)
     if (vente) {
-      setSaleFormData({ ...vente, prix: vente.prix.toString() })
+      setSaleFormData({
+         nom_prenom_client: vente.nom_prenom_client,
+         numero_telephone: vente.numero_telephone,
+         date_vente: vente.date_vente,
+         nom_produit: vente.nom_produit || "",
+         modele: vente.modele,
+         marque: vente.marque,
+         imei_telephone: vente.imei_telephone,
+         prix: vente.prix.toString()
+       })
       setEditingId(id)
       setActiveTab("ventes")
     }
@@ -1190,12 +1886,20 @@ export default function SalesManagementApp() {
       saleFormData.prix
     ) {
       try {
+        // Prepare sale data excluding nom_produit (not in sales table schema)
+        const saleData = {
+          nom_prenom_client: saleFormData.nom_prenom_client,
+          numero_telephone: saleFormData.numero_telephone,
+          date_vente: saleFormData.date_vente,
+          modele: saleFormData.modele,
+          marque: saleFormData.marque,
+          imei_telephone: saleFormData.imei_telephone,
+          prix: Number.parseInt(saleFormData.prix),
+        }
+
         const { data, error } = await supabase
           .from("sales")
-          .update({
-            ...saleFormData,
-            prix: Number.parseInt(saleFormData.prix),
-          })
+          .update(saleData)
           .eq("id", editingId)
           .eq("user_id", user.id)
           .select()
@@ -1211,6 +1915,7 @@ export default function SalesManagementApp() {
           nom_prenom_client: "",
           numero_telephone: "",
           date_vente: "",
+          nom_produit: "",
           modele: "",
           marque: "",
           imei_telephone: "",
@@ -1239,6 +1944,7 @@ export default function SalesManagementApp() {
       nom_prenom_client: "",
       numero_telephone: "",
       date_vente: "",
+      nom_produit: "",
       modele: "",
       marque: "",
       imei_telephone: "",
@@ -1295,20 +2001,20 @@ export default function SalesManagementApp() {
 
       await supabase.from("company_settings").upsert({
         user_id: user.id,
-        nom_compagnie: tempSettings.companyName.trim(),
-        nom_admin: tempSettings.adminName.trim(),
+        nom_compagnie: tempSettings.nom_compagnie.trim(),
+        nom_admin: tempSettings.nom_admin.trim(),
         logo_url: logoUrl,
         email: tempSettings.email?.trim() || null,
         phone: tempSettings.phone?.trim() || null,
         address: tempSettings.address?.trim() || null,
         website: tempSettings.website?.trim() || null,
-        tax_id: tempSettings.taxId?.trim() || null,
+        tax_id: tempSettings.tax_id?.trim() || null,
         currency: tempSettings.currency,
         language: tempSettings.language,
         timezone: tempSettings.timezone,
       })
 
-      setCompanySettings({ ...tempSettings, logoUrl })
+      setCompanySettings({ ...tempSettings, logo_url: logoUrl })
       setIsEditingSettings(false)
       setLogoFile(null)
 
@@ -1352,7 +2058,7 @@ export default function SalesManagementApp() {
     setTempSettings(companySettings)
     setIsEditingSettings(false)
     setLogoFile(null)
-    setLogoPreview(companySettings.logoUrl || null)
+    setLogoPreview(companySettings.logo_url || null)
   }
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1408,27 +2114,87 @@ export default function SalesManagementApp() {
         return
       }
 
-      const { data, error } = await supabase
-        .from("sales")
-        .insert([
-          {
-            ...saleFormData,
+      // Validate stock availability before creating sale
+      const selectedProduct = products.find(p =>
+        p.nom_produit === saleFormData.nom_produit &&
+        p.marque === saleFormData.marque &&
+        p.couleur === saleFormData.modele
+      )
+
+      if (!selectedProduct) {
+        toast({
+          title: "Erreur",
+          description: "Produit non trouvé dans l'inventaire",
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (selectedProduct.quantite_stock <= 0) {
+        toast({
+          title: "Erreur",
+          description: "Ce produit n'est plus en stock",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Create sale with transaction safety
+      const saleResult = await executeTransactionWithRollback(
+        // Main operation: create sale
+        async () => {
+          // Prepare sale data excluding nom_produit (not in sales table schema)
+          const saleData = {
+            nom_prenom_client: saleFormData.nom_prenom_client,
+            numero_telephone: saleFormData.numero_telephone,
+            date_vente: saleFormData.date_vente,
+            modele: saleFormData.modele,
+            marque: saleFormData.marque,
+            imei_telephone: saleFormData.imei_telephone,
             prix: Number.parseInt(saleFormData.prix),
             user_id: user.id,
-          },
-        ])
-        .select()
+          }
 
-      if (error) throw error
+          const { data, error } = await supabase
+            .from("sales")
+            .insert([saleData])
+            .select()
 
-      if (data && data[0]) {
-        setVentes([data[0], ...ventes])
-      }
+          if (error) throw error
+          if (!data || !data[0]) throw new Error("Échec de la création de la vente")
+
+          return data[0]
+        },
+        // Rollback operation: delete sale if stock deduction fails
+        async (createdSale: any) => {
+          console.log("Rolling back sale creation:", createdSale.id)
+          await supabase
+            .from("sales")
+            .delete()
+            .eq("id", createdSale.id)
+            .eq("user_id", user.id)
+        }
+      )
+
+      // Deduct stock after successful sale creation
+      const saleItem = [{
+        product_name: selectedProduct.nom_produit,
+        marque: selectedProduct.marque,
+        modele: selectedProduct.couleur,
+        quantity: 1, // Sales are for individual items
+        unit_price: selectedProduct.prix_unitaire,
+      }]
+
+      await deductFromInventory(saleItem, user.id)
+
+      // Update local state only after everything succeeds
+      setVentes([saleResult, ...ventes])
 
       setSaleFormData({
         nom_prenom_client: "",
         numero_telephone: "",
         date_vente: "",
+        nom_produit: "",
         modele: "",
         marque: "",
         imei_telephone: "",
@@ -1439,7 +2205,7 @@ export default function SalesManagementApp() {
       setSuccessModal({
         isOpen: true,
         message: "Vente ajoutée avec succès!",
-        subMessage: "La nouvelle vente a été enregistrée dans le système.",
+        subMessage: "La nouvelle vente a été enregistrée dans le système et le stock mis à jour.",
       })
     } catch (error) {
       console.error("Error adding sale:", error)
@@ -1449,7 +2215,7 @@ export default function SalesManagementApp() {
         variant: "destructive",
       })
     }
-  }, [saleFormData, supabase, toast, ventes])
+  }, [saleFormData, supabase, toast, ventes, products, deductFromInventory, user])
 
   const handleDeleteSale = async (id: string) => {
     if (!user) return
@@ -1501,15 +2267,503 @@ export default function SalesManagementApp() {
         subMessage={successModal.subMessage}
       />
 
+      {/* Invoice Preview Modal */}
+      {showInvoicePreview && invoicePreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-2xl font-bold text-gray-900">
+                Aperçu Facture - {invoicePreview.invoice_number}
+              </h2>
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => printInvoice(invoicePreview)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+                >
+                  <Printer className="w-4 h-4" />
+                  Imprimer
+                </Button>
+                <Button
+                  onClick={() => setShowInvoicePreview(false)}
+                  variant="outline"
+                  className="px-4 py-2 rounded-lg"
+                >
+                  <CloseIcon className="w-4 h-4" />
+                  Fermer
+                </Button>
+              </div>
+            </div>
+            <div className="overflow-y-auto max-h-[calc(90vh-120px)]">
+              <div className="p-6">
+                {(() => {
+                  const invoice = invoicePreview
+                  const invoiceItemsForPrint = invoice.invoice_items || []
+
+                  const getStatusStyle = (status: string) => {
+                    switch (status) {
+                      case 'paid':
+                        return { bg: '#10b981', color: '#ffffff', text: 'PAYÉE' }
+                      case 'unpaid':
+                        return { bg: '#f59e0b', color: '#ffffff', text: 'NON PAYÉE' }
+                      case 'refunded':
+                        return { bg: '#6b7280', color: '#ffffff', text: 'REMBOURSÉE' }
+                      default:
+                        return { bg: '#6b7280', color: '#ffffff', text: 'BROUILLON' }
+                    }
+                  }
+
+                  const statusStyle = getStatusStyle(invoice.payment_status)
+
+                  return (
+                    <div className="invoice-container" style={{maxWidth: 'none', margin: '0', boxShadow: 'none', borderRadius: '0'}}>
+                      {/* Header Section */}
+                      <div className="header" style={{
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        color: 'white',
+                        padding: '40px',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        borderRadius: '8px 8px 0 0'
+                      }}>
+                        <div style={{
+                          position: 'relative',
+                          zIndex: 1,
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center'
+                        }}>
+                          <div>
+                            <h1 style={{
+                              fontSize: '36px',
+                              fontWeight: 700,
+                              marginBottom: '8px',
+                              letterSpacing: '-0.025em'
+                            }}>Facture</h1>
+                            <div style={{
+                              fontSize: '18px',
+                              fontWeight: 500,
+                              opacity: 0.9,
+                              background: 'rgba(255, 255, 255, 0.2)',
+                              padding: '6px 12px',
+                              borderRadius: '20px',
+                              display: 'inline-block',
+                              backdropFilter: 'blur(10px)'
+                            }}>{invoice.invoice_number}</div>
+                          </div>
+                          <div style={{
+                            background: statusStyle.bg,
+                            color: statusStyle.color,
+                            padding: '8px 16px',
+                            borderRadius: '20px',
+                            fontWeight: 600,
+                            fontSize: '14px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                          }}>{statusStyle.text}</div>
+                        </div>
+                      </div>
+
+                      {/* Company and Client Info */}
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        gap: '40px',
+                        marginTop: '0',
+                        padding: '30px',
+                        background: '#f8fafc',
+                        borderBottom: '1px solid #e2e8f0'
+                      }}>
+                        <div>
+                          <h3 style={{
+                            fontSize: '14px',
+                            fontWeight: 600,
+                            color: '#718096',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                            marginBottom: '12px'
+                          }}>Émis par</h3>
+                          <div style={{
+                            fontSize: '20px',
+                            fontWeight: 700,
+                            color: '#1a202c',
+                            marginBottom: '8px'
+                          }}>{companySettings.nom_compagnie}</div>
+                          <p style={{marginBottom: '4px', color: '#2d3748', fontWeight: 500}}>
+                            Géré par: {companySettings.nom_admin}
+                          </p>
+                          {companySettings.email && <p style={{marginBottom: '4px', color: '#2d3748', fontWeight: 500}}>
+                            Email: {companySettings.email}
+                          </p>}
+                          {companySettings.phone && <p style={{marginBottom: '4px', color: '#2d3748', fontWeight: 500}}>
+                            Tél: {companySettings.phone}
+                          </p>}
+                          {companySettings.address && <p style={{marginBottom: '4px', color: '#2d3748', fontWeight: 500}}>
+                            {companySettings.address}
+                          </p>}
+                        </div>
+                        <div>
+                          <h3 style={{
+                            fontSize: '14px',
+                            fontWeight: 600,
+                            color: '#718096',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                            marginBottom: '12px'
+                          }}>Facturé à</h3>
+                          <div style={{
+                            fontSize: '18px',
+                            fontWeight: 600,
+                            color: '#2b6cb0',
+                            marginBottom: '8px'
+                          }}>{invoice.client_name}</div>
+                          {invoice.client_email && <p style={{marginBottom: '4px', color: '#2d3748', fontWeight: 500}}>
+                            Email: {invoice.client_email}
+                          </p>}
+                          {invoice.client_phone && <p style={{marginBottom: '4px', color: '#2d3748', fontWeight: 500}}>
+                            Tél: {invoice.client_phone}
+                          </p>}
+                          {invoice.client_address && <p style={{marginBottom: '4px', color: '#2d3748', fontWeight: 500}}>
+                            {invoice.client_address.replace(/\n/g, '<br>')}
+                          </p>}
+                        </div>
+                      </div>
+
+                      {/* Invoice Details */}
+                      <div style={{padding: '30px', background: 'white'}}>
+                        <div style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                          gap: '20px',
+                          marginBottom: '30px'
+                        }}>
+                          <div style={{
+                            background: '#f7fafc',
+                            padding: '16px',
+                            borderRadius: '8px',
+                            border: '1px solid #e2e8f0'
+                          }}>
+                            <div style={{
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              color: '#718096',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.05em',
+                              marginBottom: '4px'
+                            }}>Date de facture</div>
+                            <div style={{
+                              fontSize: '16px',
+                              fontWeight: 600,
+                              color: '#2d3748'
+                            }}>{new Date(invoice.invoice_date).toLocaleDateString("fr-FR")}</div>
+                          </div>
+                          {invoice.due_date && (
+                            <div style={{
+                              background: '#f7fafc',
+                              padding: '16px',
+                              borderRadius: '8px',
+                              border: '1px solid #e2e8f0'
+                            }}>
+                              <div style={{
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                color: '#718096',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.05em',
+                                marginBottom: '4px'
+                              }}>Date d'échéance</div>
+                              <div style={{
+                                fontSize: '16px',
+                                fontWeight: 600,
+                                color: '#2d3748'
+                              }}>{new Date(invoice.due_date).toLocaleDateString("fr-FR")}</div>
+                            </div>
+                          )}
+                          <div style={{
+                            background: '#f7fafc',
+                            padding: '16px',
+                            borderRadius: '8px',
+                            border: '1px solid #e2e8f0'
+                          }}>
+                            <div style={{
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              color: '#718096',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.05em',
+                              marginBottom: '4px'
+                            }}>Numéro de facture</div>
+                            <div style={{
+                              fontSize: '16px',
+                              fontWeight: 600,
+                              color: '#2d3748'
+                            }}>{invoice.invoice_number}</div>
+                          </div>
+                          <div style={{
+                            background: '#f7fafc',
+                            padding: '16px',
+                            borderRadius: '8px',
+                            border: '1px solid #e2e8f0'
+                          }}>
+                            <div style={{
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              color: '#718096',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.05em',
+                              marginBottom: '4px'
+                            }}>Statut</div>
+                            <div style={{
+                              fontSize: '16px',
+                              fontWeight: 600,
+                              color: statusStyle.bg
+                            }}>{statusStyle.text}</div>
+                          </div>
+                        </div>
+
+                        {/* Products Section */}
+                        <div style={{marginBottom: '30px'}}>
+                          <h2 style={{
+                            fontSize: '20px',
+                            fontWeight: 600,
+                            color: '#2d3748',
+                            marginBottom: '20px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px'
+                          }}>
+                            <span style={{
+                              width: '4px',
+                              height: '20px',
+                              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                              borderRadius: '2px'
+                            }}></span>
+                            Articles
+                          </h2>
+                          <table style={{
+                            width: '100%',
+                            borderCollapse: 'collapse',
+                            marginBottom: '20px',
+                            borderRadius: '8px',
+                            overflow: 'hidden',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                          }}>
+                            <thead>
+                              <tr style={{
+                                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                color: 'white'
+                              }}>
+                                <th style={{
+                                  padding: '16px 20px',
+                                  textAlign: 'left',
+                                  fontWeight: 600,
+                                  fontSize: '14px',
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.05em'
+                                }}>Produit/Service</th>
+                                <th style={{
+                                  padding: '16px 20px',
+                                  textAlign: 'left',
+                                  fontWeight: 600,
+                                  fontSize: '14px',
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.05em'
+                                }}>Détails</th>
+                                <th style={{
+                                  padding: '16px 20px',
+                                  textAlign: 'left',
+                                  fontWeight: 600,
+                                  fontSize: '14px',
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.05em'
+                                }}>Quantité</th>
+                                <th style={{
+                                  padding: '16px 20px',
+                                  textAlign: 'left',
+                                  fontWeight: 600,
+                                  fontSize: '14px',
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.05em'
+                                }}>Prix unitaire</th>
+                                <th style={{
+                                  padding: '16px 20px',
+                                  textAlign: 'left',
+                                  fontWeight: 600,
+                                  fontSize: '14px',
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.05em'
+                                }}>Total</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {invoiceItemsForPrint.map((item, index) => (
+                                <tr key={index} style={{
+                                  borderBottom: '1px solid #e2e8f0',
+                                  transition: 'background-color 0.2s ease'
+                                }}>
+                                  <td style={{padding: '16px 20px', verticalAlign: 'top'}}>
+                                    <div style={{
+                                      fontWeight: 600,
+                                      color: '#2d3748',
+                                      marginBottom: '4px'
+                                    }}>{item.product_name}</div>
+                                  </td>
+                                  <td style={{padding: '16px 20px', verticalAlign: 'top'}}>
+                                    <div style={{
+                                      fontSize: '14px',
+                                      color: '#718096',
+                                      lineHeight: '1.4'
+                                    }}>
+                                      {item.marque && <div><strong>Marque:</strong> {item.marque}</div>}
+                                      {item.modele && <div><strong>Modèle:</strong> {item.modele}</div>}
+                                      {item.imei && <div><strong>SN:</strong> {item.imei}</div>}
+                                      {item.provenance && <div><strong>Provenance:</strong> {item.provenance}</div>}
+                                    </div>
+                                  </td>
+                                  <td style={{padding: '16px 20px', verticalAlign: 'top'}}>
+                                    <span style={{
+                                      background: '#e6fffa',
+                                      color: '#065f46',
+                                      padding: '4px 8px',
+                                      borderRadius: '12px',
+                                      fontSize: '12px',
+                                      fontWeight: 600,
+                                      display: 'inline-block'
+                                    }}>{item.quantity}</span>
+                                  </td>
+                                  <td style={{
+                                    padding: '16px 20px',
+                                    verticalAlign: 'top',
+                                    fontWeight: 600,
+                                    color: '#2d3748',
+                                    textAlign: 'right'
+                                  }}>{item.unit_price.toLocaleString("fr-FR")} FCFA</td>
+                                  <td style={{
+                                    padding: '16px 20px',
+                                    verticalAlign: 'top',
+                                    fontWeight: 600,
+                                    color: '#2d3748',
+                                    textAlign: 'right'
+                                  }}>{(item.quantity * item.unit_price).toLocaleString("fr-FR")} FCFA</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Totals Section */}
+                        <div style={{
+                          background: '#f8fafc',
+                          borderRadius: '8px',
+                          padding: '24px',
+                          marginTop: '30px'
+                        }}>
+                          <h3 style={{
+                            fontSize: '18px',
+                            fontWeight: 600,
+                            color: '#2d3748',
+                            marginBottom: '16px'
+                          }}>Récapitulatif</h3>
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            padding: '8px 0',
+                            borderBottom: '1px solid #e2e8f0'
+                          }}>
+                            <span style={{fontWeight: 500, color: '#4a5568'}}>Sous-total</span>
+                            <span style={{fontWeight: 600, color: '#2d3748'}}>
+                              {invoice.subtotal.toLocaleString("fr-FR")} FCFA
+                            </span>
+                          </div>
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            padding: '8px 0',
+                            borderBottom: '1px solid #e2e8f0'
+                          }}>
+                            <span style={{fontWeight: 500, color: '#4a5568'}}>
+                              TVA ({invoice.tax_rate}%)
+                            </span>
+                            <span style={{fontWeight: 600, color: '#2d3748'}}>
+                              {invoice.tax_amount.toLocaleString("fr-FR")} FCFA
+                            </span>
+                          </div>
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            padding: '8px 0',
+                            borderTop: '2px solid #667eea',
+                            paddingTop: '16px',
+                            marginTop: '8px',
+                            fontSize: '20px',
+                            fontWeight: 700,
+                            color: '#667eea'
+                          }}>
+                            <span style={{fontWeight: 500, color: '#4a5568'}}>Total</span>
+                            <span style={{fontWeight: 600, color: '#667eea'}}>
+                              {invoice.total_amount.toLocaleString("fr-FR")} FCFA
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Notes Section */}
+                        {invoice.notes && (
+                          <div style={{
+                            marginTop: '30px',
+                            padding: '20px',
+                            background: '#fef5e7',
+                            borderRadius: '8px',
+                            borderLeft: '4px solid #f59e0b'
+                          }}>
+                            <h3 style={{
+                              fontSize: '16px',
+                              fontWeight: 600,
+                              color: '#92400e',
+                              marginBottom: '8px'
+                            }}>Notes</h3>
+                            <div style={{
+                              color: '#78350f',
+                              lineHeight: '1.6'
+                            }}>{invoice.notes.replace(/\n/g, '<br>')}</div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Footer */}
+                      <div style={{
+                        background: '#1a202c',
+                        color: 'white',
+                        padding: '20px',
+                        textAlign: 'center',
+                        fontSize: '14px'
+                      }}>
+                        <p style={{marginBottom: '4px'}}>
+                          <span style={{fontWeight: 600}}>{companySettings.nom_compagnie}</span>
+                        </p>
+                        <p>Merci pour votre confiance • Facture générée le {new Date().toLocaleDateString("fr-FR")}</p>
+                        {companySettings.website && <p>{companySettings.website}</p>}
+                      </div>
+                    </div>
+                  )
+                })()}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <header className="bg-gradient-to-r from-indigo-600/10 via-purple-600/5 to-pink-600/10 border-b border-slate-200/50 dark:border-slate-700/50 shadow-xl backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 sm:p-6 space-y-4 sm:space-y-0">
             <div className="flex items-center space-x-3 sm:space-x-4 min-w-0 flex-1">
-              {companySettings.logoUrl ? (
+              {companySettings.logo_url ? (
                 <div className="relative flex-shrink-0">
                   <img
-                    src={companySettings.logoUrl || "/placeholder.svg"}
-                    alt={`Logo de ${companySettings.companyName}`}
+                    src={companySettings.logo_url || "/placeholder.svg"}
+                    alt={`Logo de ${companySettings.nom_compagnie}`}
                     className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl object-cover shadow-md ring-2 ring-primary/20"
                   />
                   <div className="absolute -bottom-1 -right-1 w-3 h-3 sm:w-4 sm:h-4 bg-green-500 rounded-full border-2 border-white" aria-label="Connecté"></div>
@@ -1521,7 +2775,7 @@ export default function SalesManagementApp() {
               )}
               <div className="min-w-0 flex-1">
                 <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent truncate">
-                  {companySettings.companyName}
+                  {companySettings.nom_compagnie}
                 </h1>
                 {user && (
                   <p className="text-xs sm:text-sm text-muted-foreground flex items-center gap-2 truncate">
@@ -1811,6 +3065,7 @@ export default function SalesManagementApp() {
               handleSaveEdit={handleSaveEdit}
               handleCancelEdit={handleCancelEdit}
               handleDeleteSale={handleDeleteSale}
+              products={products}
             />
           </div>
         ) : activeTab === "stock" ? (
@@ -1826,10 +3081,11 @@ export default function SalesManagementApp() {
         ) : activeTab === "factures" ? ( // Adding factures tab condition
           <div role="tabpanel" id="factures-panel" aria-labelledby="factures-tab">
             <InvoicesView
-              invoices={invoices}
+              invoices={filteredInvoices}
               showAddInvoiceForm={showAddInvoiceForm}
               setShowAddInvoiceForm={setShowAddInvoiceForm}
               editingInvoiceId={editingInvoiceId}
+              onEditInvoice={handleEditInvoice}
               invoiceFormData={invoiceFormData}
               handleInvoiceFormChange={handleInvoiceFormChange}
               invoiceItems={invoiceItems}
@@ -1838,9 +3094,15 @@ export default function SalesManagementApp() {
               removeInvoiceItem={removeInvoiceItem}
               handleAddInvoice={handleAddInvoice}
               resetInvoiceForm={resetInvoiceForm}
-              printInvoice={printInvoice}
+              printInvoice={previewInvoice}
               handleDeleteInvoice={handleDeleteInvoice}
               isSubmitting={isSubmittingInvoice}
+              products={products}
+              onProductSelect={handleProductSelect}
+              invoiceSearchTerm={invoiceSearchTerm}
+              setInvoiceSearchTerm={setInvoiceSearchTerm}
+              invoiceStatusFilter={invoiceStatusFilter}
+              setInvoiceStatusFilter={setInvoiceStatusFilter}
             />
           </div>
         ) : (

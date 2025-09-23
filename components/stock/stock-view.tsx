@@ -13,19 +13,19 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { createClient } from "@/lib/supabase/client"
 
 interface Product {
-  id: string
-  nom_produit: string
-  marque: string
-  modele: string
-  prix_unitaire: number
-  quantite_stock: number
-  description?: string
-  photo_url?: string
-  imei_telephone?: string
-  provenance?: string
-  created_at?: string
-  updated_at?: string
-}
+   id: string
+   nom_produit: string
+   marque: string
+   couleur: string
+   prix_unitaire: number
+   quantite_stock: number
+   description?: string
+   photo_url?: string
+   imei_telephone?: string
+   provenance?: string
+   created_at?: string
+   updated_at?: string
+ }
 
 interface Provenance {
   id: string
@@ -61,7 +61,7 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
   const [productFormData, setProductFormData] = useState({
     nom_produit: "",
     marque: "",
-    modele: "",
+    couleur: "",
     prix_unitaire: "",
     quantite_stock: "",
     description: "",
@@ -82,7 +82,7 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
     // Search filter
     const matchesSearch =
       product.nom_produit.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.modele.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.couleur.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.marque.toLowerCase().includes(searchTerm.toLowerCase())
 
     // Stock status filter
@@ -206,7 +206,7 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
       const productData = {
         nom_produit: productFormData.nom_produit.trim(),
         marque: productFormData.marque.trim(),
-        modele: productFormData.modele.trim(),
+        couleur: productFormData.couleur.trim(),
         prix_unitaire: Number.parseFloat(productFormData.prix_unitaire),
         quantite_stock: Number.parseInt(productFormData.quantite_stock),
         description: productFormData.description.trim() || null,
@@ -235,7 +235,7 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
       setProductFormData({
         nom_produit: "",
         marque: "",
-        modele: "",
+        couleur: "",
         prix_unitaire: "",
         quantite_stock: "",
         description: "",
@@ -268,7 +268,7 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
       setProductFormData({
         nom_produit: product.nom_produit,
         marque: product.marque,
-        modele: product.modele,
+        couleur: product.couleur,
         prix_unitaire: product.prix_unitaire.toString(),
         quantite_stock: product.quantite_stock.toString(),
         description: product.description || "",
@@ -288,7 +288,7 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
       editingProductId &&
       productFormData.nom_produit &&
       productFormData.marque &&
-      productFormData.modele &&
+      productFormData.couleur &&
       productFormData.prix_unitaire &&
       productFormData.quantite_stock
     ) {
@@ -334,7 +334,7 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
         setProductFormData({
           nom_produit: "",
           marque: "",
-          modele: "",
+          couleur: "",
           prix_unitaire: "",
           quantite_stock: "",
           description: "",
@@ -368,7 +368,7 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
     setProductFormData({
       nom_produit: "",
       marque: "",
-      modele: "",
+      couleur: "",
       prix_unitaire: "",
       quantite_stock: "",
       description: "",
@@ -596,14 +596,14 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
                       </div>
 
                       <div>
-                        <Label htmlFor="modele" className="text-gray-700 font-medium">
-                          Modèle *
+                        <Label htmlFor="couleur" className="text-gray-700 font-medium">
+                          Couleur *
                         </Label>
                         <Input
-                          id="modele"
-                          value={productFormData.modele}
-                          onChange={(e) => setProductFormData({ ...productFormData, modele: e.target.value })}
-                          placeholder="Ex: 15 Pro Max"
+                          id="couleur"
+                          value={productFormData.couleur}
+                          onChange={(e) => setProductFormData({ ...productFormData, couleur: e.target.value })}
+                          placeholder="Ex: Noir, Blanc, Bleu"
                           className="mt-2 h-10 sm:h-12 bg-white border-gray-300 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-base"
                         />
                       </div>
@@ -966,7 +966,7 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
                     {product.nom_produit}
                   </h3>
                   <p className="text-sm text-gray-600 font-medium">
-                    {product.marque} • {product.modele}
+                    {product.marque} • {product.couleur}
                   </p>
                 </div>
 

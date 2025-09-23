@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { Search, Plus, Save, X, Edit, Trash2, Smartphone, Phone, Calendar } from "lucide-react"
+import { Search, Plus, Save, X, Edit, Trash2, Smartphone, Phone, Calendar, Package } from "lucide-react"
 
 interface Sale {
   id: string
@@ -19,6 +19,21 @@ interface Sale {
   imei_telephone: string
   prix: number
   created_at?: string
+}
+
+interface Product {
+  id: string
+  nom_produit: string
+  marque: string
+  couleur: string
+  prix_unitaire: number
+  quantite_stock: number
+  description?: string
+  photo_url?: string
+  imei_telephone?: string
+  provenance?: string
+  created_at?: string
+  updated_at?: string
 }
 
 interface SalesViewProps {
@@ -36,6 +51,7 @@ interface SalesViewProps {
   handleSaveEdit: () => void
   handleCancelEdit: () => void
   handleDeleteSale: (id: string) => void
+  products?: Product[]
 }
 
 const PHONE_BRANDS = [
@@ -57,8 +73,85 @@ export const SalesView = React.memo(function SalesView({
   handleEditVente,
   handleSaveEdit,
   handleCancelEdit,
-  handleDeleteSale
+  handleDeleteSale,
+  products = []
 }: SalesViewProps) {
+
+  const [selectedProduct, setSelectedProduct] = React.useState<Product | null>(null)
+  const [formErrors, setFormErrors] = React.useState<Record<string, string>>({})
+
+  const handleProductSelect = (productId: string) => {
+    const selectedProduct = products.find(p => p.id === productId)
+    if (selectedProduct) {
+      setSelectedProduct(selectedProduct)
+      setFormData({
+        ...formData,
+        nom_produit: selectedProduct.nom_produit,
+        marque: selectedProduct.marque,
+        modele: selectedProduct.couleur, // Map couleur to modele for sales
+        prix: selectedProduct.prix_unitaire.toString(),
+        imei_telephone: selectedProduct.imei_telephone || "",
+      })
+      // Clear any previous errors for this field
+      setFormErrors(prev => ({ ...prev, product: "" }))
+    }
+  }
+
+  const validateForm = () => {
+    const errors: Record<string, string> = {}
+
+    if (!selectedProduct) {
+      errors.product = "Veuillez sélectionner un produit"
+    }
+
+    if (!formData.nom_prenom_client?.trim()) {
+      errors.nom_prenom_client = "Le nom du client est requis"
+    }
+
+    if (!formData.numero_telephone?.trim()) {
+      errors.numero_telephone = "Le numéro de téléphone est requis"
+    }
+
+    if (!formData.date_vente) {
+      errors.date_vente = "La date de vente est requise"
+    }
+
+    if (!formData.prix || isNaN(Number(formData.prix)) || Number(formData.prix) <= 0) {
+      errors.prix = "Le prix doit être un nombre positif"
+    }
+
+    setFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
+  // Check if form is ready to submit
+  const isFormValid = selectedProduct &&
+                     formData.nom_prenom_client?.trim() &&
+                     formData.numero_telephone?.trim() &&
+                     formData.date_vente &&
+                     formData.prix &&
+                     !isNaN(Number(formData.prix)) &&
+                     Number(formData.prix) > 0
+
+  const handleSubmit = async () => {
+    if (validateForm()) {
+      try {
+        // Call the parent handler
+        if (editingId) {
+          await handleSaveEdit()
+        } else {
+          await handleAddVente()
+        }
+        // Reset form state on success
+        setSelectedProduct(null)
+        setFormErrors({})
+      } catch (error) {
+        console.error('Error submitting form:', error)
+        // Error handling is done in parent component
+      }
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-green-500/10 rounded-3xl p-8 border border-emerald-200/50 dark:border-emerald-800/50 shadow-lg backdrop-blur-sm">
@@ -87,42 +180,275 @@ export const SalesView = React.memo(function SalesView({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                handleSubmit()
+              }}
+              className="space-y-6"
+            >
+              {/* Product Selection Section */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <Package className="w-4 h-4 text-primary" />
+                  <h3 className="font-medium text-card-foreground">Sélection du Produit</h3>
+                </div>
+
+                <div>
+                  <Label htmlFor="productSelect" className="text-card-foreground">
+                    Produit disponible en stock *
+                  </Label>
+                  <Select
+                    value=""
+                    onValueChange={handleProductSelect}
+                  >
+                    <SelectTrigger className="bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
+                      <SelectValue placeholder="Sélectionnez un produit du stock" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {products
+                        .filter(product => product.quantite_stock > 0)
+                        .map((product) => (
+                          <SelectItem key={product.id} value={product.id}>
+                            <div className="flex items-center justify-between w-full">
+                              <div className="flex flex-col">
+                                <span className="font-medium">{product.nom_produit}</span>
+                                <span className="text-sm text-muted-foreground">{product.marque} {product.couleur}</span>
+                              </div>
+                              <div className="flex flex-col items-end gap-1">
+                                <span className={`text-xs px-2 py-1 rounded font-medium ${
+                                  product.quantite_stock === 0
+                                    ? 'bg-red-100 text-red-800 border border-red-200'
+                                    : product.quantite_stock <= 2
+                                    ? 'bg-red-100 text-red-800 border border-red-200'
+                                    : product.quantite_stock <= 5
+                                    ? 'bg-orange-100 text-orange-800 border border-orange-200'
+                                    : 'bg-green-100 text-green-800 border border-green-200'
+                                }`}>
+                                  {product.quantite_stock === 0
+                                    ? 'Rupture'
+                                    : product.quantite_stock <= 2
+                                    ? `Critique: ${product.quantite_stock}`
+                                    : product.quantite_stock <= 5
+                                    ? `Faible: ${product.quantite_stock}`
+                                    : `Stock: ${product.quantite_stock}`
+                                  }
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  {product.prix_unitaire.toLocaleString("fr-FR")} FCFA
+                                </span>
+                              </div>
+                            </div>
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  {products.filter(p => p.quantite_stock > 0).length === 0 && (
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Aucun produit en stock disponible
+                    </p>
+                  )}
+                </div>
+
+              {/* Selected Product Display */}
+              {selectedProduct && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-medium text-blue-800 mb-1">Produit sélectionné</h4>
+                      <p className="text-sm text-blue-700">
+                        {selectedProduct.nom_produit} - {selectedProduct.marque} {selectedProduct.couleur}
+                      </p>
+                      <p className="text-xs text-blue-600 mt-1">
+                        Prix unitaire: {selectedProduct.prix_unitaire.toLocaleString("fr-FR")} FCFA
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                        selectedProduct.quantite_stock === 0
+                          ? 'bg-red-100 text-red-800'
+                          : selectedProduct.quantite_stock <= 2
+                          ? 'bg-red-100 text-red-800'
+                          : selectedProduct.quantite_stock <= 5
+                          ? 'bg-orange-100 text-orange-800'
+                          : 'bg-green-100 text-green-800'
+                      }`}>
+                        Stock: {selectedProduct.quantite_stock}
+                      </div>
+                      {selectedProduct.quantite_stock <= 2 && (
+                        <p className="text-xs text-red-600 mt-1 font-medium">
+                          ⚠ Stock critique !
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Form Status Message */}
+              {!isFormValid && selectedProduct && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-white text-xs font-bold">ℹ</span>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-blue-800 mb-2">Informations requises</h4>
+                      <p className="text-sm text-blue-700">
+                        Veuillez remplir tous les champs obligatoires (*) pour pouvoir enregistrer la vente.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Form Validation Errors */}
+              {Object.keys(formErrors).length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mt-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-white text-xs font-bold">✕</span>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-red-800 mb-2">Erreurs de validation</h4>
+                      <ul className="space-y-1">
+                        {Object.entries(formErrors).map(([field, error]) => (
+                          <li key={field} className="text-sm text-red-700">
+                            • {error}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Stock Warnings */}
+              {products.filter(p => p.quantite_stock <= 5 && p.quantite_stock > 0).length > 0 && (
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mt-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-white text-xs font-bold">!</span>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-orange-800 mb-2">Alerte Stock Faible</h4>
+                      <div className="space-y-1">
+                        {products
+                          .filter(p => p.quantite_stock <= 5 && p.quantite_stock > 0)
+                          .slice(0, 3)
+                          .map(product => (
+                            <p key={product.id} className="text-sm text-orange-700">
+                              • {product.nom_produit} ({product.marque} {product.couleur}): {product.quantite_stock} restant{product.quantite_stock > 1 ? 's' : ''}
+                            </p>
+                          ))
+                        }
+                        {products.filter(p => p.quantite_stock <= 5 && p.quantite_stock > 0).length > 3 && (
+                          <p className="text-sm text-orange-700 font-medium">
+                            ... et {products.filter(p => p.quantite_stock <= 5 && p.quantite_stock > 0).length - 3} autres produits
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {products.filter(p => p.quantite_stock === 0).length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mt-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-white text-xs font-bold">⚠</span>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-red-800 mb-2">Rupture de Stock</h4>
+                      <div className="space-y-1">
+                        {products
+                          .filter(p => p.quantite_stock === 0)
+                          .slice(0, 3)
+                          .map(product => (
+                            <p key={product.id} className="text-sm text-red-700">
+                              • {product.nom_produit} ({product.marque} {product.couleur}): Rupture de stock
+                            </p>
+                          ))
+                        }
+                        {products.filter(p => p.quantite_stock === 0).length > 3 && (
+                          <p className="text-sm text-red-700 font-medium">
+                            ... et {products.filter(p => p.quantite_stock === 0).length - 3} autres produits en rupture
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="nomPrenom" className="text-card-foreground">
-                  Nom et Prénom Client
-                </Label>
-                <Input
-                  id="nomPrenom"
-                  value={formData.nom_prenom_client}
-                  onChange={(e) => setFormData({ ...formData, nom_prenom_client: e.target.value })}
-                  placeholder="Ex: Marie Dubois"
-                  className="bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                />
-              </div>
+               <div>
+                 <Label htmlFor="nomPrenom" className="text-card-foreground">
+                   Nom et Prénom Client *
+                 </Label>
+                 <Input
+                   id="nomPrenom"
+                   value={formData.nom_prenom_client}
+                   onChange={(e) => {
+                     setFormData({ ...formData, nom_prenom_client: e.target.value })
+                     if (formErrors.nom_prenom_client) {
+                       setFormErrors(prev => ({ ...prev, nom_prenom_client: "" }))
+                     }
+                   }}
+                   placeholder="Ex: Marie Dubois"
+                   className={`bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all ${
+                     formErrors.nom_prenom_client ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''
+                   }`}
+                 />
+                 {formErrors.nom_prenom_client && (
+                   <p className="text-sm text-red-600 mt-1">{formErrors.nom_prenom_client}</p>
+                 )}
+               </div>
               <div>
                 <Label htmlFor="numeroTelephone" className="text-card-foreground">
-                  Numéro Téléphone
+                  Numéro Téléphone *
                 </Label>
                 <Input
                   id="numeroTelephone"
                   value={formData.numero_telephone}
-                  onChange={(e) => setFormData({ ...formData, numero_telephone: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, numero_telephone: e.target.value })
+                    if (formErrors.numero_telephone) {
+                      setFormErrors(prev => ({ ...prev, numero_telephone: "" }))
+                    }
+                  }}
                   placeholder="Ex: +33 6 12 34 56 78"
-                  className="bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  className={`bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all ${
+                    formErrors.numero_telephone ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''
+                  }`}
                 />
+                {formErrors.numero_telephone && (
+                  <p className="text-sm text-red-600 mt-1">{formErrors.numero_telephone}</p>
+                )}
               </div>
               <div>
                 <Label htmlFor="dateVente" className="text-card-foreground">
-                  Date de Vente
+                  Date de Vente *
                 </Label>
                 <Input
                   id="dateVente"
                   type="date"
                   value={formData.date_vente}
-                  onChange={(e) => setFormData({ ...formData, date_vente: e.target.value })}
-                  className="bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  onChange={(e) => {
+                    setFormData({ ...formData, date_vente: e.target.value })
+                    if (formErrors.date_vente) {
+                      setFormErrors(prev => ({ ...prev, date_vente: "" }))
+                    }
+                  }}
+                  className={`bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all ${
+                    formErrors.date_vente ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''
+                  }`}
                 />
+                {formErrors.date_vente && (
+                  <p className="text-sm text-red-600 mt-1">{formErrors.date_vente}</p>
+                )}
               </div>
               <div>
                 <Label htmlFor="modele" className="text-card-foreground">
@@ -158,16 +484,26 @@ export const SalesView = React.memo(function SalesView({
               </div>
               <div>
                 <Label htmlFor="prix" className="text-card-foreground">
-                  Prix (FCFA)
+                  Prix (FCFA) *
                 </Label>
                 <Input
                   id="prix"
                   type="number"
                   value={formData.prix}
-                  onChange={(e) => setFormData({ ...formData, prix: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, prix: e.target.value })
+                    if (formErrors.prix) {
+                      setFormErrors(prev => ({ ...prev, prix: "" }))
+                    }
+                  }}
                   placeholder="Ex: 1299000"
-                  className="bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  className={`bg-input border-border focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all ${
+                    formErrors.prix ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''
+                  }`}
                 />
+                {formErrors.prix && (
+                  <p className="text-sm text-red-600 mt-1">{formErrors.prix}</p>
+                )}
               </div>
               <div className="sm:col-span-2">
                 <Label htmlFor="imei" className="text-card-foreground">
@@ -182,20 +518,22 @@ export const SalesView = React.memo(function SalesView({
                 />
               </div>
             </div>
-            <div className="flex space-x-2 pt-4">
-              <Button
-                onClick={editingId ? handleSaveEdit : handleAddVente}
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                <Save className="w-4 h-4 mr-2" />
-                {editingId ? "Sauvegarder" : "Ajouter"}
-              </Button>
-              <Button variant="outline" onClick={handleCancelEdit} className="border-border bg-transparent">
-                <X className="w-4 h-4 mr-2" />
-                Annuler
-              </Button>
-            </div>
-          </CardContent>
+                <div className="flex space-x-2 pt-4">
+                  <Button
+                    type="submit"
+                    disabled={!isFormValid}
+                    className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    {editingId ? "Sauvegarder" : "Ajouter"}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={handleCancelEdit} className="border-border bg-transparent">
+                    <X className="w-4 h-4 mr-2" />
+                    Annuler
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
         </Card>
       )}
 

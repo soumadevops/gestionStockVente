@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { Plus, Trash2, Printer, FileText, Eye, Save, Copy, Calculator, AlertTriangle, CheckCircle, Clock, Users, Package, DollarSign, Calendar, FileCheck } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Plus, Trash2, Printer, FileText, Eye, Save, Copy, Calculator, AlertTriangle, CheckCircle, Clock, Users, Package, DollarSign, Calendar, FileCheck, Search, Edit } from "lucide-react"
 
 interface Invoice {
   id: string
@@ -22,7 +23,8 @@ interface Invoice {
   tax_rate: number
   tax_amount: number
   total_amount: number
-  status: "draft" | "sent" | "paid" | "overdue"
+  status: "draft" | "sent" | "paid" | "overdue" | "unpaid" | "refunded"
+  payment_status: "unpaid" | "paid" | "refunded"
   notes?: string
   created_at: string
   updated_at: string
@@ -30,46 +32,75 @@ interface Invoice {
 
 interface InvoiceItem {
   product_name: string
-  description?: string
+  imei?: string
+  marque?: string
+  modele?: string
+  provenance?: string
   quantity: number
   unit_price: number
 }
 
+interface Product {
+   id: string
+   nom_produit: string
+   marque: string
+   couleur: string
+   prix_unitaire: number
+   quantite_stock: number
+   description?: string
+   imei_telephone?: string
+   provenance?: string
+ }
+
 interface InvoicesViewProps {
-  invoices: Invoice[]
-  showAddInvoiceForm: boolean
-  setShowAddInvoiceForm: (show: boolean) => void
-  editingInvoiceId: string | null
-  invoiceFormData: any
-  handleInvoiceFormChange: (field: string, value: string) => void
-  invoiceItems: InvoiceItem[]
-  handleInvoiceItemChange: (index: number, field: string, value: any) => void
-  addInvoiceItem: () => void
-  removeInvoiceItem: (index: number) => void
-  handleAddInvoice: () => void
-  resetInvoiceForm: () => void
-  printInvoice: (invoice: Invoice) => void
-  handleDeleteInvoice: (id: string) => void
-  isSubmitting?: boolean
-}
+   invoices: Invoice[]
+   showAddInvoiceForm: boolean
+   setShowAddInvoiceForm: (show: boolean) => void
+   editingInvoiceId: string | null
+   onEditInvoice: (invoiceId: string) => void
+   invoiceFormData: any
+   handleInvoiceFormChange: (field: string, value: string) => void
+   invoiceItems: InvoiceItem[]
+   handleInvoiceItemChange: (index: number, field: string, value: any) => void
+   addInvoiceItem: () => void
+   removeInvoiceItem: (index: number) => void
+   handleAddInvoice: () => void
+   resetInvoiceForm: () => void
+   printInvoice: (invoice: Invoice) => void
+   handleDeleteInvoice: (id: string) => void
+   isSubmitting?: boolean
+   products?: Product[]
+   onProductSelect?: (index: number, product: Product) => void
+   invoiceSearchTerm: string
+   setInvoiceSearchTerm: (term: string) => void
+   invoiceStatusFilter: string
+   setInvoiceStatusFilter: (status: string) => void
+ }
 
 export const InvoicesView = React.memo(function InvoicesView({
-  invoices,
-  showAddInvoiceForm,
-  setShowAddInvoiceForm,
-  editingInvoiceId,
-  invoiceFormData,
-  handleInvoiceFormChange,
-  invoiceItems,
-  handleInvoiceItemChange,
-  addInvoiceItem,
-  removeInvoiceItem,
-  handleAddInvoice,
-  resetInvoiceForm,
-  printInvoice,
-  handleDeleteInvoice,
-  isSubmitting = false
-}: InvoicesViewProps) {
+   invoices,
+   showAddInvoiceForm,
+   setShowAddInvoiceForm,
+   editingInvoiceId,
+   onEditInvoice,
+   invoiceFormData,
+   handleInvoiceFormChange,
+   invoiceItems,
+   handleInvoiceItemChange,
+   addInvoiceItem,
+   removeInvoiceItem,
+   handleAddInvoice,
+   resetInvoiceForm,
+   printInvoice,
+   handleDeleteInvoice,
+   isSubmitting = false,
+   products = [],
+   onProductSelect,
+   invoiceSearchTerm,
+   setInvoiceSearchTerm,
+   invoiceStatusFilter,
+   setInvoiceStatusFilter
+ }: InvoicesViewProps) {
   // Auto-save functionality
   const autoSaveKey = `invoice_draft_${editingInvoiceId || 'new'}`
 
@@ -114,23 +145,62 @@ export const InvoicesView = React.memo(function InvoicesView({
       return () => clearTimeout(timeout)
     }
   }, [invoiceFormData, invoiceItems, showAddInvoiceForm, saveDraft])
+
   return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-r from-rose-500/10 via-pink-500/5 to-purple-500/10 rounded-3xl p-8 border border-rose-200/50 dark:border-rose-800/50 shadow-lg backdrop-blur-sm">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-rose-600 via-pink-600 to-purple-600 bg-clip-text text-transparent mb-2">
-              Gestion des Factures
-            </h1>
-            <p className="text-slate-600 dark:text-slate-300">Créez, modifiez et imprimez vos factures</p>
+    <div className="space-y-8">
+      {/* Hero Header Section */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 rounded-3xl p-8 shadow-2xl">
+        <div className="absolute inset-0 bg-black/10"></div>
+        <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+
+        <div className="relative flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+                <FileText className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl lg:text-4xl font-bold text-white mb-1">
+                  Gestion des Factures
+                </h1>
+                <p className="text-blue-100 text-lg">Créez, modifiez et imprimez vos factures professionnellement</p>
+              </div>
+            </div>
+
+            {/* Quick Stats */}
+            <div className="flex flex-wrap gap-6 mt-6">
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
+                <div className="text-2xl font-bold text-white">{invoices.length}</div>
+                <div className="text-blue-100 text-sm">Total Factures</div>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
+                <div className="text-2xl font-bold text-white">{invoices.filter(inv => inv.payment_status === "paid").length}</div>
+                <div className="text-blue-100 text-sm">Payées</div>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
+                <div className="text-2xl font-bold text-white">{invoices.reduce((sum, inv) => sum + inv.total_amount, 0).toLocaleString("fr-FR")}</div>
+                <div className="text-blue-100 text-sm">Montant Total</div>
+              </div>
+            </div>
           </div>
-          <Button
-            onClick={() => setShowAddInvoiceForm(true)}
-            className="bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 px-6 py-3 rounded-xl"
-          >
-            <Plus className="w-5 h-5 mr-2" />
-            Nouvelle Facture
-          </Button>
+
+          <div className="flex flex-col sm:flex-row gap-3 lg:flex-shrink-0">
+            <Button
+              onClick={() => setShowAddInvoiceForm(true)}
+              className="bg-white text-indigo-600 hover:bg-blue-50 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 px-8 py-4 rounded-xl font-semibold text-lg"
+            >
+              <Plus className="w-5 h-5 mr-2" />
+              Nouvelle Facture
+            </Button>
+            <Button
+              variant="outline"
+              className="border-white/30 text-white hover:bg-white/10 backdrop-blur-sm px-6 py-4 rounded-xl font-medium"
+            >
+              <Calculator className="w-5 h-5 mr-2" />
+              Rapports
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -302,87 +372,151 @@ export const InvoicesView = React.memo(function InvoicesView({
                     ) : (
                       <div className="space-y-3">
                         {invoiceItems.map((item, index) => (
-                          <div key={index} className="p-4 border border-border rounded-lg bg-muted/20 hover:bg-muted/30 transition-colors">
-                            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-                              <div className="md:col-span-3">
-                                <Label className="text-xs text-muted-foreground mb-1 block">
-                                  Produit/Service *
-                                </Label>
-                                <Input
-                                  placeholder="Nom du produit"
-                                  value={item.product_name}
-                                  onChange={(e) => handleInvoiceItemChange(index, "product_name", e.target.value)}
-                                  className={`bg-background border-border text-foreground text-sm ${
-                                    !item.product_name ? 'border-orange-300' : ''
-                                  }`}
-                                  required
-                                />
-                              </div>
-                              <div className="md:col-span-3">
-                                <Label className="text-xs text-muted-foreground mb-1 block">
-                                  Description
-                                </Label>
-                                <Input
-                                  placeholder="Description optionnelle"
-                                  value={item.description}
-                                  onChange={(e) => handleInvoiceItemChange(index, "description", e.target.value)}
-                                  className="bg-background border-border text-foreground text-sm"
-                                />
-                              </div>
-                              <div className="md:col-span-2">
-                                <Label className="text-xs text-muted-foreground mb-1 block">
-                                  Quantité *
-                                </Label>
-                                <Input
-                                  type="number"
-                                  placeholder="1"
-                                  value={item.quantity}
-                                  onChange={(e) => handleInvoiceItemChange(index, "quantity", Math.max(1, Number.parseInt(e.target.value) || 1))}
-                                  className="bg-background border-border text-foreground text-sm"
-                                  min="1"
-                                  required
-                                />
-                              </div>
-                              <div className="md:col-span-2">
-                                <Label className="text-xs text-muted-foreground mb-1 block">
-                                  Prix Unit. (FCFA) *
-                                </Label>
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  placeholder="0.00"
-                                  value={item.unit_price}
-                                  onChange={(e) =>
-                                    handleInvoiceItemChange(index, "unit_price", Math.max(0, Number.parseFloat(e.target.value) || 0))
-                                  }
-                                  className="bg-background border-border text-foreground text-sm"
-                                  min="0"
-                                  required
-                                />
-                              </div>
-                              <div className="md:col-span-1">
-                                <div className="flex items-center justify-between h-9">
-                                  <div className="text-sm font-medium text-primary">
-                                    {(item.quantity * item.unit_price).toLocaleString("fr-FR")}
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="md:col-span-1">
-                                {invoiceItems.length > 1 && (
-                                  <Button
-                                    type="button"
-                                    onClick={() => removeInvoiceItem(index)}
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-red-500 hover:text-red-700 hover:bg-red-50 h-9 w-9 p-0"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                           <div key={index} className="p-4 border border-border rounded-lg bg-muted/20 hover:bg-muted/30 transition-colors">
+                             {/* Product Selection */}
+                             <div className="mb-3">
+                               <Label className="text-xs text-muted-foreground mb-1 block">
+                                 Sélectionner un produit du stock
+                               </Label>
+                               <Select
+                                 value=""
+                                 onValueChange={(productId) => {
+                                   const selectedProduct = products.find(p => p.id === productId)
+                                   if (selectedProduct && onProductSelect) {
+                                     onProductSelect(index, selectedProduct)
+                                   }
+                                 }}
+                               >
+                                 <SelectTrigger className="bg-background border-border text-foreground text-sm">
+                                   <SelectValue placeholder="Choisir un produit du stock..." />
+                                 </SelectTrigger>
+                                 <SelectContent>
+                                   {products.filter(p => p.quantite_stock > 0).map((product) => (
+                                     <SelectItem key={product.id} value={product.id}>
+                                       {product.nom_produit} - {product.marque} {product.couleur} (Stock: {product.quantite_stock})
+                                     </SelectItem>
+                                   ))}
+                                 </SelectContent>
+                               </Select>
+                             </div>
+
+                             <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                               <div className="md:col-span-2">
+                                 <Label className="text-xs text-muted-foreground mb-1 block">
+                                   Produit/Service *
+                                 </Label>
+                                 <Input
+                                   placeholder="Nom du produit"
+                                   value={item.product_name}
+                                   onChange={(e) => handleInvoiceItemChange(index, "product_name", e.target.value)}
+                                   className={`bg-background border-border text-foreground text-sm ${
+                                     !item.product_name ? 'border-orange-300' : ''
+                                   }`}
+                                   required
+                                 />
+                               </div>
+                               <div className="md:col-span-2">
+                                 <Label className="text-xs text-muted-foreground mb-1 block">
+                                   Marque
+                                 </Label>
+                                 <Input
+                                   placeholder="Marque"
+                                   value={item.marque || ""}
+                                   onChange={(e) => handleInvoiceItemChange(index, "marque", e.target.value)}
+                                   className="bg-background border-border text-foreground text-sm"
+                                 />
+                               </div>
+                               <div className="md:col-span-2">
+                                 <Label className="text-xs text-muted-foreground mb-1 block">
+                                   Modèle
+                                 </Label>
+                                 <Input
+                                   placeholder="Modèle"
+                                   value={item.modele || ""}
+                                   onChange={(e) => handleInvoiceItemChange(index, "modele", e.target.value)}
+                                   className="bg-background border-border text-foreground text-sm"
+                                 />
+                               </div>
+                               <div className="md:col-span-2">
+                                 <Label className="text-xs text-muted-foreground mb-1 block">
+                                   IMEI
+                                 </Label>
+                                 <Input
+                                   placeholder="IMEI"
+                                   value={item.imei || ""}
+                                   onChange={(e) => handleInvoiceItemChange(index, "imei", e.target.value)}
+                                   className="bg-background border-border text-foreground text-sm"
+                                 />
+                               </div>
+                               <div className="md:col-span-1">
+                                 <Label className="text-xs text-muted-foreground mb-1 block">
+                                   Quantité *
+                                 </Label>
+                                 <Input
+                                   type="number"
+                                   placeholder="1"
+                                   value={item.quantity}
+                                   onChange={(e) => handleInvoiceItemChange(index, "quantity", Math.max(1, Number.parseInt(e.target.value) || 1))}
+                                   className="bg-background border-border text-foreground text-sm"
+                                   min="1"
+                                   required
+                                 />
+                               </div>
+                               <div className="md:col-span-2">
+                                 <Label className="text-xs text-muted-foreground mb-1 block">
+                                   Prix Unit. (FCFA) *
+                                 </Label>
+                                 <Input
+                                   type="number"
+                                   step="0.01"
+                                   placeholder="0.00"
+                                   value={item.unit_price}
+                                   onChange={(e) =>
+                                     handleInvoiceItemChange(index, "unit_price", Math.max(0, Number.parseFloat(e.target.value) || 0))
+                                   }
+                                   className="bg-background border-border text-foreground text-sm"
+                                   min="0"
+                                   required
+                                 />
+                               </div>
+                               <div className="md:col-span-1">
+                                 <div className="flex items-center justify-between h-9">
+                                   <div className="text-sm font-medium text-primary">
+                                     {(item.quantity * item.unit_price).toLocaleString("fr-FR")}
+                                   </div>
+                                 </div>
+                               </div>
+                             </div>
+                             <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mt-3">
+                               <div className="md:col-span-6">
+                                 <Label className="text-xs text-muted-foreground mb-1 block">
+                                   Provenance
+                                 </Label>
+                                 <Input
+                                   placeholder="Provenance"
+                                   value={item.provenance || ""}
+                                   onChange={(e) => handleInvoiceItemChange(index, "provenance", e.target.value)}
+                                   className="bg-background border-border text-foreground text-sm"
+                                 />
+                               </div>
+                               <div className="md:col-span-5">
+                                 <div className="flex items-center justify-end h-9">
+                                   {invoiceItems.length > 1 && (
+                                     <Button
+                                       type="button"
+                                       onClick={() => removeInvoiceItem(index)}
+                                       variant="ghost"
+                                       size="sm"
+                                       className="text-red-500 hover:text-red-700 hover:bg-red-50 h-9 w-9 p-0"
+                                     >
+                                       <Trash2 className="w-4 h-4" />
+                                     </Button>
+                                   )}
+                                 </div>
+                               </div>
+                             </div>
+                           </div>
+                         ))}
                       </div>
                     )}
                   </div>
@@ -409,6 +543,25 @@ export const InvoicesView = React.memo(function InvoicesView({
                           min="0"
                           max="100"
                         />
+                      </div>
+ 
+                      <div className="space-y-2">
+                        <Label htmlFor="payment_status" className="text-foreground">
+                          Statut de Paiement
+                        </Label>
+                        <Select
+                          value={invoiceFormData.payment_status}
+                          onValueChange={(value) => handleInvoiceFormChange("payment_status", value)}
+                        >
+                          <SelectTrigger className="bg-background border-border text-foreground">
+                            <SelectValue placeholder="Sélectionnez le statut" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="unpaid">Non payée</SelectItem>
+                            <SelectItem value="paid">Payée</SelectItem>
+                            <SelectItem value="refunded">Remboursée</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
 
@@ -568,84 +721,144 @@ export const InvoicesView = React.memo(function InvoicesView({
         </div>
       )}
 
-      <Card className="bg-card border-border shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-card-foreground">Liste des Factures</CardTitle>
-        </CardHeader>
-        <CardContent>
+      {/* Invoice List Section */}
+      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+        <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-8 py-6 border-b border-gray-200">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+                <Package className="w-6 h-6 text-indigo-600" />
+                Liste des Factures
+              </h2>
+              <p className="text-gray-600 mt-1">Gérez toutes vos factures en un seul endroit</p>
+            </div>
+
+            {/* Filter and Search Bar */}
+            <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  placeholder="Rechercher une facture..."
+                  value={invoiceSearchTerm}
+                  onChange={(e) => setInvoiceSearchTerm(e.target.value)}
+                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-full lg:w-64"
+                />
+              </div>
+              <select
+                value={invoiceStatusFilter}
+                onChange={(e) => setInvoiceStatusFilter(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="">Tous les statuts</option>
+                <option value="paid">Payées</option>
+                <option value="unpaid">Non payées</option>
+                <option value="refunded">Remboursées</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-8">
           {/* Desktop Table */}
-          <div className="hidden md:block overflow-x-auto">
+          <div className="hidden md:block overflow-hidden rounded-xl border border-gray-200 shadow-sm">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left p-2 text-foreground">N° Facture</th>
-                  <th className="text-left p-2 text-foreground">Client</th>
-                  <th className="text-left p-2 text-foreground">Date</th>
-                  <th className="text-left p-2 text-foreground">Montant</th>
-                  <th className="text-left p-2 text-foreground">Statut</th>
-                  <th className="text-left p-2 text-foreground">Actions</th>
+                <tr className="bg-gradient-to-r from-indigo-50 to-blue-50 border-b border-gray-200">
+                  <th className="text-left px-6 py-4 text-indigo-700 font-bold text-sm uppercase tracking-wider">N° Facture</th>
+                  <th className="text-left px-6 py-4 text-indigo-700 font-bold text-sm uppercase tracking-wider">Client</th>
+                  <th className="text-left px-6 py-4 text-indigo-700 font-bold text-sm uppercase tracking-wider">Date</th>
+                  <th className="text-left px-6 py-4 text-indigo-700 font-bold text-sm uppercase tracking-wider">Montant</th>
+                  <th className="text-left px-6 py-4 text-indigo-700 font-bold text-sm uppercase tracking-wider">Statut</th>
+                  <th className="text-left px-6 py-4 text-indigo-700 font-bold text-sm uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
-              <tbody>
-                {invoices.map((invoice) => (
-                  <tr key={invoice.id} className="border-b border-border hover:bg-muted/50">
-                    <td className="p-2 text-foreground font-medium">{invoice.invoice_number}</td>
-                    <td className="p-2 text-foreground">{invoice.client_name}</td>
-                    <td className="p-2 text-foreground">{new Date(invoice.invoice_date).toLocaleDateString("fr-FR")}</td>
-                    <td className="p-2 font-medium">{invoice.total_amount.toLocaleString("fr-FR")} FCFA</td>
-                    <td className="p-2">
+              <tbody className="divide-y divide-gray-200">
+                {invoices.map((invoice, index) => (
+                  <tr key={invoice.id} className="hover:bg-indigo-50/50 transition-all duration-200 cursor-pointer group" onClick={() => onEditInvoice(invoice.id)}>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
+                          <FileText className="w-5 h-5 text-indigo-600" />
+                        </div>
+                        <div className="ml-4">
+                          <div className="text-sm font-semibold text-gray-900">{invoice.invoice_number}</div>
+                          <div className="text-sm text-gray-500">Cliquez pour modifier</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm font-medium text-gray-900">{invoice.client_name}</div>
+                      {invoice.client_email && <div className="text-sm text-gray-500">{invoice.client_email}</div>}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-900">{new Date(invoice.invoice_date).toLocaleDateString("fr-FR")}</div>
+                      {invoice.due_date && (
+                        <div className="text-sm text-gray-500">Échéance: {new Date(invoice.due_date).toLocaleDateString("fr-FR")}</div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-lg font-bold text-gray-900">{invoice.total_amount.toLocaleString("fr-FR")} <span className="text-sm font-normal text-gray-500">FCFA</span></div>
+                      <div className="text-sm text-gray-500">TVA: {invoice.tax_amount.toLocaleString("fr-FR")} FCFA</div>
+                    </td>
+                    <td className="px-6 py-4">
                       <span
-                        className={`px-2 py-1 rounded-full text-xs ${
-                          invoice.status === "paid"
-                            ? "bg-green-100 text-green-800"
-                            : invoice.status === "sent"
-                              ? "bg-blue-100 text-blue-800"
-                              : invoice.status === "overdue"
-                                ? "bg-red-100 text-red-800"
-                                : "bg-gray-100 text-gray-800"
+                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                          invoice.payment_status === "paid"
+                            ? "bg-green-100 text-green-800 border border-green-200"
+                            : invoice.payment_status === "unpaid"
+                              ? "bg-yellow-100 text-yellow-800 border border-yellow-200"
+                              : "bg-gray-100 text-gray-800 border border-gray-200"
                         }`}
                       >
-                        {invoice.status === "paid"
+                        <span className={`w-2 h-2 rounded-full mr-2 ${
+                          invoice.payment_status === "paid"
+                            ? "bg-green-400"
+                            : invoice.payment_status === "unpaid"
+                              ? "bg-yellow-400"
+                              : "bg-gray-400"
+                        }`}></span>
+                        {invoice.payment_status === "paid"
                           ? "Payée"
-                          : invoice.status === "sent"
-                            ? "Envoyée"
-                            : invoice.status === "overdue"
-                              ? "En retard"
-                              : "Brouillon"}
+                          : invoice.payment_status === "unpaid"
+                            ? "Non payée"
+                            : "Remboursée"}
                       </span>
                     </td>
-                    <td className="p-2">
-                      <div className="flex space-x-2">
-                        <Button
-                          onClick={() => printInvoice(invoice)}
-                          variant="ghost"
-                          size="sm"
-                          className="text-blue-600 hover:text-blue-800"
-                          title="Imprimer la facture"
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-600 font-medium">
+                        <span
+                          className="text-blue-600 hover:text-blue-800 cursor-pointer hover:underline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEditInvoice(invoice.id);
+                          }}
                         >
-                          <Printer className="w-4 h-4" />
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-800">
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Êtes-vous sûr?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Voulez-vous vraiment supprimer la facture ?
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Annuler</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDeleteInvoice(invoice.id)}>
-                                Confirmer
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                          modifier
+                        </span>
+                        <span className="mx-1 text-gray-400">|</span>
+                        <span
+                          className="text-red-600 hover:text-red-800 cursor-pointer hover:underline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Handle delete with confirmation
+                            if (window.confirm(`Êtes-vous sûr de vouloir supprimer la facture ${invoice.invoice_number} ?`)) {
+                              handleDeleteInvoice(invoice.id);
+                            }
+                          }}
+                        >
+                          supprimer
+                        </span>
+                        <span className="mx-1 text-gray-400">|</span>
+                        <span
+                          className="text-indigo-600 hover:text-indigo-800 cursor-pointer hover:underline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            printInvoice(invoice);
+                          }}
+                        >
+                          imprimer
+                        </span>
                       </div>
                     </td>
                   </tr>
@@ -655,82 +868,80 @@ export const InvoicesView = React.memo(function InvoicesView({
           </div>
 
           {/* Mobile Card Layout */}
-          <div className="md:hidden space-y-4">
-            {invoices.map((invoice) => (
-              <Card key={invoice.id} className="bg-white border border-gray-200 shadow-sm">
-                <CardContent className="p-4">
+          <div className="md:hidden space-y-2">
+            {invoices.map((invoice, index) => (
+              <div key={invoice.id} className={`border border-gray-300 rounded-lg shadow-sm ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors cursor-pointer`} onClick={() => onEditInvoice(invoice.id)}>
+                <div className="p-4">
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <h3 className="font-semibold text-gray-900">{invoice.invoice_number}</h3>
-                      <p className="text-sm text-gray-600">{invoice.client_name}</p>
+                      <h3 className="font-semibold text-gray-900 text-lg">{invoice.invoice_number}</h3>
+                      <p className="text-sm text-gray-600 font-medium">{invoice.client_name}</p>
                     </div>
                     <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        invoice.status === "paid"
-                          ? "bg-green-100 text-green-800"
-                          : invoice.status === "sent"
-                            ? "bg-blue-100 text-blue-800"
-                            : invoice.status === "overdue"
-                              ? "bg-red-100 text-red-800"
-                              : "bg-gray-100 text-gray-800"
+                      className={`px-3 py-1 rounded-full text-xs font-medium border ${
+                        invoice.payment_status === "paid"
+                          ? "bg-green-100 text-green-800 border-green-200"
+                          : invoice.payment_status === "unpaid"
+                            ? "bg-yellow-100 text-yellow-800 border-yellow-200"
+                            : "bg-gray-100 text-gray-800 border-gray-200"
                       }`}
                     >
-                      {invoice.status === "paid"
+                      {invoice.payment_status === "paid"
                         ? "Payée"
-                        : invoice.status === "sent"
-                          ? "Envoyée"
-                          : invoice.status === "overdue"
-                            ? "En retard"
-                            : "Brouillon"}
+                        : invoice.payment_status === "unpaid"
+                          ? "Non payée"
+                          : "Remboursée"}
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4 mb-3 text-sm">
+                  <div className="grid grid-cols-2 gap-4 mb-4 text-sm border-t border-gray-200 pt-3">
                     <div>
-                      <p className="text-gray-500">Date</p>
-                      <p className="font-medium">{new Date(invoice.invoice_date).toLocaleDateString("fr-FR")}</p>
+                      <p className="text-gray-500 font-medium">Date</p>
+                      <p className="font-semibold text-gray-900">{new Date(invoice.invoice_date).toLocaleDateString("fr-FR")}</p>
                     </div>
                     <div>
-                      <p className="text-gray-500">Montant</p>
-                      <p className="font-medium text-green-600">{invoice.total_amount.toLocaleString("fr-FR")} FCFA</p>
+                      <p className="text-gray-500 font-medium">Montant</p>
+                      <p className="font-bold text-lg text-green-600">{invoice.total_amount.toLocaleString("fr-FR")} FCFA</p>
                     </div>
                   </div>
 
-                  <div className="flex justify-end space-x-2">
-                    <Button
-                      onClick={() => printInvoice(invoice)}
-                      variant="outline"
-                      size="sm"
-                      className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                    >
-                      <Printer className="w-4 h-4 mr-1" />
-                      Imprimer
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50">
-                          <Trash2 className="w-4 h-4 mr-1" />
-                          Supprimer
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Êtes-vous sûr?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Voulez-vous vraiment supprimer la facture ?
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Annuler</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDeleteInvoice(invoice.id)}>
-                            Confirmer
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                  <div className="border-t border-gray-200 pt-3">
+                    <div className="text-sm text-gray-600 font-medium">
+                      <span
+                        className="text-blue-600 hover:text-blue-800 cursor-pointer hover:underline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditInvoice(invoice.id);
+                        }}
+                      >
+                        modifier
+                      </span>
+                      <span className="mx-1 text-gray-400">|</span>
+                      <span
+                        className="text-red-600 hover:text-red-800 cursor-pointer hover:underline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm(`Êtes-vous sûr de vouloir supprimer la facture ${invoice.invoice_number} ?`)) {
+                            handleDeleteInvoice(invoice.id);
+                          }
+                        }}
+                      >
+                        supprimer
+                      </span>
+                      <span className="mx-1 text-gray-400">|</span>
+                      <span
+                        className="text-indigo-600 hover:text-indigo-800 cursor-pointer hover:underline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          printInvoice(invoice);
+                        }}
+                      >
+                        imprimer
+                      </span>
+                    </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             ))}
           </div>
 
@@ -739,8 +950,8 @@ export const InvoicesView = React.memo(function InvoicesView({
               Aucune facture trouvée. Créez votre première facture !
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   )
 })

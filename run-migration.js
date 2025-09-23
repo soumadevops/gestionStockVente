@@ -14,8 +14,9 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function runMigration() {
   try {
-    const sql = fs.readFileSync('scripts/014_add_user_id_to_sales.sql', 'utf8');
-    console.log('Running provenance migration...');
+    const migrationFile = process.argv[2] || '014_add_user_id_to_sales.sql';
+    const sql = fs.readFileSync(`scripts/${migrationFile}`, 'utf8');
+    console.log(`Running migration: ${migrationFile}`);
 
     // Split the SQL into individual statements
     const statements = sql.split(';').filter(stmt => stmt.trim().length > 0);
