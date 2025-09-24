@@ -1,6 +1,7 @@
 import type { Invoice } from "@/lib/types"
+import html2pdf from 'html2pdf.js'
 
-export function printInvoice(invoice: Invoice, template: 'modern' | 'simple' | 'minimal' = 'modern') {
+export function printInvoice(invoice: Invoice, template: 'modern' | 'simple' | 'minimal' = 'modern', action: 'print' | 'download' = 'print') {
   const printWindow = window.open("", "_blank")
   if (!printWindow) {
     throw new Error("Impossible d'ouvrir la fenêtre d'impression. Vérifiez que les pop-ups sont autorisés.")
@@ -70,13 +71,13 @@ export function printInvoice(invoice: Invoice, template: 'modern' | 'simple' | '
 
               @media print {
                 body {
-                  font-size: 11px;
-                  line-height: 1.4;
+                  font-size: 9px;
+                  line-height: 1.2;
                 }
 
                 @page {
                   size: A4;
-                  margin: 15mm;
+                  margin: 8mm;
                 }
               }
 
@@ -106,7 +107,7 @@ export function printInvoice(invoice: Invoice, template: 'modern' | 'simple' | '
                 align-items: flex-start;
                 margin-bottom: 30px;
                 padding-bottom: 20px;
-                border-bottom: 2px solid #3b82f6;
+                border-bottom: 2px solid #16a34a;
               }
 
               .company-info {
@@ -221,7 +222,7 @@ export function printInvoice(invoice: Invoice, template: 'modern' | 'simple' | '
               }
 
               .items-table thead {
-                background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+                background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
                 color: white;
               }
 
@@ -300,7 +301,7 @@ export function printInvoice(invoice: Invoice, template: 'modern' | 'simple' | '
 
               .total-row:last-child {
                 border-bottom: none;
-                border-top: 2px solid #3b82f6;
+                border-top: 2px solid #16a34a;
                 padding-top: 10px;
                 margin-top: 8px;
               }
@@ -327,42 +328,42 @@ export function printInvoice(invoice: Invoice, template: 'modern' | 'simple' | '
 
               /* Notes Section */
               .notes-section {
-                margin-bottom: 20px;
-                padding: 12px;
+                margin-bottom: 10px;
+                padding: 6px;
                 background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-                border-radius: 6px;
-                border-left: 4px solid #f59e0b;
+                border-radius: 4px;
+                border-left: 3px solid #f59e0b;
               }
 
               .notes-title {
-                font-size: 11px;
+                font-size: 9px;
                 font-weight: 700;
                 color: #92400e;
-                margin-bottom: 6px;
+                margin-bottom: 3px;
               }
 
               .notes-content {
                 color: #78350f;
-                font-size: 10px;
-                line-height: 1.5;
+                font-size: 8px;
+                line-height: 1.3;
               }
 
               /* Footer */
               .footer {
-                margin-top: 30px;
-                padding-top: 15px;
+                margin-top: 15px;
+                padding-top: 8px;
                 border-top: 1px solid #e5e7eb;
                 text-align: center;
                 color: #6b7280;
-                font-size: 9px;
-                line-height: 1.5;
+                font-size: 7px;
+                line-height: 1.3;
               }
 
               .footer-thanks {
                 font-weight: 600;
                 color: #1f2937;
-                margin-bottom: 6px;
-                font-size: 11px;
+                margin-bottom: 3px;
+                font-size: 9px;
               }
 
               /* Print Optimizations */
@@ -372,50 +373,50 @@ export function printInvoice(invoice: Invoice, template: 'modern' | 'simple' | '
                 }
 
                 .invoice-container {
-                  padding: 0;
+                  padding: 3mm;
                   margin: 0;
                   border: none;
                   box-shadow: none;
                 }
 
                 .items-table {
-                  font-size: 10px;
+                  font-size: 8px;
                 }
 
                 .items-table th,
                 .items-table td {
-                  padding: 8px 12px;
+                  padding: 4px 6px;
                 }
 
                 .header {
-                  margin-bottom: 20px;
-                  padding-bottom: 15px;
+                  margin-bottom: 8px;
+                  padding-bottom: 6px;
                 }
 
                 .company-name {
-                  font-size: 20px;
+                  font-size: 12px;
                 }
 
                 .invoice-title {
-                  font-size: 16px;
+                  font-size: 11px;
                 }
 
                 .billing-section {
-                  gap: 20px;
-                  margin-bottom: 20px;
+                  gap: 8px;
+                  margin-bottom: 8px;
                 }
 
                 .billing-group {
-                  padding: 10px;
+                  padding: 5px;
                 }
 
                 .totals-box {
-                  padding: 15px;
+                  padding: 6px;
                 }
 
                 .footer {
-                  margin-top: 20px;
-                  padding-top: 10px;
+                  margin-top: 8px;
+                  padding-top: 4px;
                 }
               }
             </style>
@@ -582,30 +583,30 @@ export function printInvoice(invoice: Invoice, template: 'modern' | 'simple' | '
 
               body {
                 font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                line-height: 1.6;
+                line-height: 1.3;
                 color: #1f2937;
                 background: #ffffff;
-                font-size: 12px;
+                font-size: 10px;
                 -webkit-print-color-adjust: exact;
                 color-adjust: exact;
               }
 
               @media print {
                 body {
-                  font-size: 11px;
-                  line-height: 1.4;
+                  font-size: 9px;
+                  line-height: 1.2;
                 }
 
                 @page {
                   size: A4;
-                  margin: 15mm;
+                  margin: 8mm;
                 }
               }
 
               .invoice-container {
                 max-width: 210mm;
                 margin: 0 auto;
-                padding: 20mm;
+                padding: 12mm;
                 background: #ffffff;
                 border: 1px solid #e5e7eb;
                 border-radius: 8px;
@@ -613,7 +614,7 @@ export function printInvoice(invoice: Invoice, template: 'modern' | 'simple' | '
 
               @media print {
                 .invoice-container {
-                  padding: 0;
+                  padding: 5mm;
                   margin: 0;
                   max-width: none;
                   border: none;
@@ -626,9 +627,9 @@ export function printInvoice(invoice: Invoice, template: 'modern' | 'simple' | '
                 display: flex;
                 justify-content: space-between;
                 align-items: flex-start;
-                margin-bottom: 30px;
-                padding-bottom: 20px;
-                border-bottom: 2px solid #3b82f6;
+                margin-bottom: 15px;
+                padding-bottom: 10px;
+                border-bottom: 2px solid #16a34a;
               }
 
               .company-info {
@@ -636,43 +637,43 @@ export function printInvoice(invoice: Invoice, template: 'modern' | 'simple' | '
               }
 
               .company-name {
-                font-size: 24px;
+                font-size: 16px;
                 font-weight: 700;
-                color: #1f2937;
-                margin-bottom: 8px;
-              }
-
-              .company-details {
-                font-size: 10px;
-                color: #6b7280;
-                line-height: 1.5;
-              }
-
-              .company-details div {
-                margin-bottom: 2px;
-              }
-
-              .invoice-info {
-                text-align: right;
-                min-width: 120px;
-              }
-
-              .invoice-title {
-                font-size: 18px;
-                font-weight: 700;
-                color: #3b82f6;
-                margin-bottom: 8px;
-              }
-
-              .invoice-number {
-                font-size: 14px;
-                font-weight: 600;
                 color: #1f2937;
                 margin-bottom: 4px;
               }
 
+              .company-details {
+                font-size: 8px;
+                color: #6b7280;
+                line-height: 1.3;
+              }
+
+              .company-details div {
+                margin-bottom: 1px;
+              }
+
+              .invoice-info {
+                text-align: right;
+                min-width: 100px;
+              }
+
+              .invoice-title {
+                font-size: 14px;
+                font-weight: 700;
+                color: #16a34a;
+                margin-bottom: 4px;
+              }
+
+              .invoice-number {
+                font-size: 11px;
+                font-weight: 600;
+                color: #1f2937;
+                margin-bottom: 2px;
+              }
+
               .invoice-date {
-                font-size: 10px;
+                font-size: 8px;
                 color: #6b7280;
               }
 
@@ -680,36 +681,36 @@ export function printInvoice(invoice: Invoice, template: 'modern' | 'simple' | '
               .billing-section {
                 display: grid;
                 grid-template-columns: 1fr 1fr;
-                gap: 30px;
-                margin-bottom: 30px;
+                gap: 15px;
+                margin-bottom: 15px;
               }
 
               .billing-group {
                 background: #f8fafc;
-                padding: 15px;
-                border-radius: 6px;
+                padding: 8px;
+                border-radius: 4px;
                 border: 1px solid #e2e8f0;
               }
 
               .billing-title {
-                font-size: 11px;
+                font-size: 9px;
                 font-weight: 700;
                 color: #374151;
                 text-transform: uppercase;
                 letter-spacing: 0.5px;
-                margin-bottom: 8px;
+                margin-bottom: 4px;
                 border-bottom: 1px solid #e2e8f0;
-                padding-bottom: 4px;
+                padding-bottom: 2px;
               }
 
               .billing-content {
-                font-size: 11px;
+                font-size: 9px;
                 color: #4b5563;
-                line-height: 1.5;
+                line-height: 1.3;
               }
 
               .billing-content div {
-                margin-bottom: 3px;
+                margin-bottom: 2px;
               }
 
               .billing-content strong {
@@ -719,45 +720,45 @@ export function printInvoice(invoice: Invoice, template: 'modern' | 'simple' | '
 
               /* Items Table */
               .items-section {
-                margin-bottom: 25px;
+                margin-bottom: 12px;
               }
 
               .items-title {
-                font-size: 14px;
+                font-size: 11px;
                 font-weight: 700;
                 color: #1f2937;
-                margin-bottom: 15px;
-                padding-bottom: 8px;
+                margin-bottom: 8px;
+                padding-bottom: 4px;
                 border-bottom: 1px solid #e5e7eb;
               }
 
               .items-table {
                 width: 100%;
                 border-collapse: collapse;
-                margin: 8px 0;
-                font-size: 11px;
+                margin: 4px 0;
+                font-size: 9px;
                 background: #ffffff;
                 border: 1px solid #e5e7eb;
-                border-radius: 6px;
+                border-radius: 4px;
                 overflow: hidden;
               }
 
               .items-table thead {
-                background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+                background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
                 color: white;
               }
 
               .items-table th {
-                padding: 12px 15px;
+                padding: 6px 8px;
                 text-align: left;
                 font-weight: 600;
-                font-size: 10px;
+                font-size: 8px;
                 text-transform: uppercase;
                 letter-spacing: 0.5px;
               }
 
               .items-table td {
-                padding: 12px 15px;
+                padding: 6px 8px;
                 border-bottom: 1px solid #f1f5f9;
                 vertical-align: top;
               }
@@ -773,12 +774,12 @@ export function printInvoice(invoice: Invoice, template: 'modern' | 'simple' | '
               .item-name {
                 font-weight: 600;
                 color: #1f2937;
-                margin-bottom: 2px;
+                margin-bottom: 1px;
               }
 
               .item-description {
                 color: #6b7280;
-                font-size: 9px;
+                font-size: 7px;
                 font-style: italic;
               }
 
@@ -810,41 +811,41 @@ export function printInvoice(invoice: Invoice, template: 'modern' | 'simple' | '
               .totals-section {
                 display: flex;
                 justify-content: flex-end;
-                margin-bottom: 25px;
+                margin-bottom: 12px;
               }
 
               .totals-box {
                 background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-                border-radius: 8px;
-                padding: 20px;
-                min-width: 200px;
+                border-radius: 6px;
+                padding: 10px;
+                min-width: 160px;
                 border: 1px solid #e2e8f0;
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
               }
 
               .total-row {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                padding: 6px 0;
+                padding: 3px 0;
                 border-bottom: 1px solid #e2e8f0;
               }
 
               .total-row:last-child {
                 border-bottom: none;
-                border-top: 2px solid #3b82f6;
-                padding-top: 10px;
-                margin-top: 8px;
+                border-top: 2px solid #16a34a;
+                padding-top: 5px;
+                margin-top: 4px;
               }
 
               .total-label {
-                font-size: 11px;
+                font-size: 9px;
                 color: #64748b;
                 font-weight: 500;
               }
 
               .total-amount {
-                font-size: 11px;
+                font-size: 9px;
                 font-weight: 700;
                 color: #1f2937;
                 font-family: 'Courier New', monospace;
@@ -852,7 +853,7 @@ export function printInvoice(invoice: Invoice, template: 'modern' | 'simple' | '
 
               .grand-total .total-label,
               .grand-total .total-amount {
-                font-size: 13px;
+                font-size: 11px;
                 font-weight: 800;
                 color: #1f2937;
               }
@@ -904,50 +905,50 @@ export function printInvoice(invoice: Invoice, template: 'modern' | 'simple' | '
                 }
 
                 .invoice-container {
-                  padding: 0;
+                  padding: 3mm;
                   margin: 0;
                   border: none;
                   box-shadow: none;
                 }
 
                 .items-table {
-                  font-size: 10px;
+                  font-size: 8px;
                 }
 
                 .items-table th,
                 .items-table td {
-                  padding: 8px 12px;
+                  padding: 4px 6px;
                 }
 
                 .header {
-                  margin-bottom: 20px;
-                  padding-bottom: 15px;
+                  margin-bottom: 8px;
+                  padding-bottom: 6px;
                 }
 
                 .company-name {
-                  font-size: 20px;
+                  font-size: 12px;
                 }
 
                 .invoice-title {
-                  font-size: 16px;
+                  font-size: 11px;
                 }
 
                 .billing-section {
-                  gap: 20px;
-                  margin-bottom: 20px;
+                  gap: 8px;
+                  margin-bottom: 8px;
                 }
 
                 .billing-group {
-                  padding: 10px;
+                  padding: 5px;
                 }
 
                 .totals-box {
-                  padding: 15px;
+                  padding: 6px;
                 }
 
                 .footer {
-                  margin-top: 20px;
-                  padding-top: 10px;
+                  margin-top: 8px;
+                  padding-top: 4px;
                 }
               }
             </style>
@@ -1097,6 +1098,42 @@ export function printInvoice(invoice: Invoice, template: 'modern' | 'simple' | '
       `
   }
 
-  printWindow.document.write(htmlContent)
-  printWindow.document.close()
+  if (action === 'download') {
+    // Create a temporary element to hold the HTML content
+    const tempDiv = document.createElement('div')
+    tempDiv.innerHTML = htmlContent
+    tempDiv.style.position = 'absolute'
+    tempDiv.style.left = '-9999px'
+    tempDiv.style.top = '-9999px'
+    document.body.appendChild(tempDiv)
+
+    // Configure PDF options
+    const options = {
+      margin: 0.5,
+      filename: `facture-${invoice.invoice_number}.pdf`,
+      image: { type: 'jpeg' as const, quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' as const }
+    }
+
+    // Generate and download PDF
+    html2pdf()
+      .set(options)
+      .from(tempDiv)
+      .save()
+      .then(() => {
+        // Clean up
+        document.body.removeChild(tempDiv)
+      })
+      .catch((error) => {
+        console.error('Error generating PDF:', error)
+        // Fallback to print if PDF generation fails
+        printWindow.document.write(htmlContent)
+        printWindow.document.close()
+      })
+  } else {
+    // Default print action
+    printWindow.document.write(htmlContent)
+    printWindow.document.close()
+  }
 }
