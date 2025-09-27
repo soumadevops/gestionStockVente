@@ -477,20 +477,42 @@ export function printInvoice(invoice: Invoice, template: 'modern' | 'simple' | '
                     </tr>
                   </thead>
                   <tbody>
-                    ${invoiceItemsForPrint.map((item, index) => `
-                      <tr>
-                        <td>
-                          <div class="item-name">${item.product_name || 'Article ' + (index + 1)}</div>
-                          ${item.marque ? `<div class="item-description">Marque: ${item.marque}</div>` : ''}
-                          ${item.modele ? `<div class="item-description">Modèle: ${item.modele}</div>` : ''}
-                          ${item.imei ? `<div class="item-description">SN: ${item.imei}</div>` : ''}
-                          ${item.provenance ? `<div class="item-description">Provenance: ${item.provenance}</div>` : ''}
-                        </td>
-                        <td class="quantity-cell">${item.quantity || 1}</td>
-                        <td class="unit-price-cell">${formatCurrency(item.unit_price || 0)}</td>
-                        <td class="total-cell">${formatCurrency((item.quantity || 1) * (item.unit_price || 0))}</td>
-                      </tr>
-                    `).join('')}
+                    ${invoiceItemsForPrint.map((item, index) => {
+                      // If item has units (quantity >= 2), display each unit separately
+                      if (item.units && item.units.length > 0) {
+                        return item.units.map((unit, unitIndex) => `
+                          <tr>
+                            <td>
+                              <div class="item-name">${item.product_name || 'Article ' + (index + 1)} - Unité ${unitIndex + 1}</div>
+                              ${item.marque ? `<div class="item-description">Marque: ${item.marque}</div>` : ''}
+                              ${item.modele ? `<div class="item-description">Modèle: ${item.modele}</div>` : ''}
+                              <div class="item-description">Couleur: ${unit.color}</div>
+                              <div class="item-description">SN: ${unit.imei}</div>
+                              ${item.provenance ? `<div class="item-description">Provenance: ${item.provenance}</div>` : ''}
+                            </td>
+                            <td class="quantity-cell">1</td>
+                            <td class="unit-price-cell">${formatCurrency(item.unit_price || 0)}</td>
+                            <td class="total-cell">${formatCurrency(item.unit_price || 0)}</td>
+                          </tr>
+                        `).join('');
+                      } else {
+                        // Original behavior for items without units
+                        return `
+                          <tr>
+                            <td>
+                              <div class="item-name">${item.product_name || 'Article ' + (index + 1)}</div>
+                              ${item.marque ? `<div class="item-description">Marque: ${item.marque}</div>` : ''}
+                              ${item.modele ? `<div class="item-description">Modèle: ${item.modele}</div>` : ''}
+                              ${item.imei ? `<div class="item-description">SN: ${item.imei}</div>` : ''}
+                              ${item.provenance ? `<div class="item-description">Provenance: ${item.provenance}</div>` : ''}
+                            </td>
+                            <td class="quantity-cell">${item.quantity || 1}</td>
+                            <td class="unit-price-cell">${formatCurrency(item.unit_price || 0)}</td>
+                            <td class="total-cell">${formatCurrency((item.quantity || 1) * (item.unit_price || 0))}</td>
+                          </tr>
+                        `;
+                      }
+                    }).join('')}
                   </tbody>
                 </table>
               </div>
@@ -1010,22 +1032,46 @@ export function printInvoice(invoice: Invoice, template: 'modern' | 'simple' | '
                     </tr>
                   </thead>
                   <tbody>
-                    ${invoiceItemsForPrint.map((item, index) => `
-                      <tr>
-                        <td class="product-service-cell">
-                          <div class="item-name">${item.product_name || 'Article ' + (index + 1)}</div>
-                          ${item.marque ? `<div class="item-description">Marque: ${item.marque}</div>` : ''}
-                          ${item.modele ? `<div class="item-description">Modèle: ${item.modele}</div>` : ''}
-                        </td>
-                        <td class="description-cell">
-                          ${item.imei ? `<div>SN: ${item.imei}</div>` : ''}
-                          ${item.provenance ? `<div>Provenance: ${item.provenance}</div>` : ''}
-                        </td>
-                        <td style="text-align: center;">${item.quantity || 1}</td>
-                        <td class="unit-price-cell">${formatCurrency(item.unit_price || 0)}</td>
-                        <td class="total-cell">${formatCurrency((item.quantity || 1) * (item.unit_price || 0))}</td>
-                      </tr>
-                    `).join('')}
+                    ${invoiceItemsForPrint.map((item, index) => {
+                      // If item has units (quantity >= 2), display each unit separately
+                      if (item.units && item.units.length > 0) {
+                        return item.units.map((unit, unitIndex) => `
+                          <tr>
+                            <td class="product-service-cell">
+                              <div class="item-name">${item.product_name || 'Article ' + (index + 1)} - Unité ${unitIndex + 1}</div>
+                              ${item.marque ? `<div class="item-description">Marque: ${item.marque}</div>` : ''}
+                              ${item.modele ? `<div class="item-description">Modèle: ${item.modele}</div>` : ''}
+                            </td>
+                            <td class="description-cell">
+                              <div>Couleur: ${unit.color}</div>
+                              <div>SN: ${unit.imei}</div>
+                              ${item.provenance ? `<div>Provenance: ${item.provenance}</div>` : ''}
+                            </td>
+                            <td style="text-align: center;">1</td>
+                            <td class="unit-price-cell">${formatCurrency(item.unit_price || 0)}</td>
+                            <td class="total-cell">${formatCurrency(item.unit_price || 0)}</td>
+                          </tr>
+                        `).join('');
+                      } else {
+                        // Original behavior for items without units
+                        return `
+                          <tr>
+                            <td class="product-service-cell">
+                              <div class="item-name">${item.product_name || 'Article ' + (index + 1)}</div>
+                              ${item.marque ? `<div class="item-description">Marque: ${item.marque}</div>` : ''}
+                              ${item.modele ? `<div class="item-description">Modèle: ${item.modele}</div>` : ''}
+                            </td>
+                            <td class="description-cell">
+                              ${item.imei ? `<div>SN: ${item.imei}</div>` : ''}
+                              ${item.provenance ? `<div>Provenance: ${item.provenance}</div>` : ''}
+                            </td>
+                            <td style="text-align: center;">${item.quantity || 1}</td>
+                            <td class="unit-price-cell">${formatCurrency(item.unit_price || 0)}</td>
+                            <td class="total-cell">${formatCurrency((item.quantity || 1) * (item.unit_price || 0))}</td>
+                          </tr>
+                        `;
+                      }
+                    }).join('')}
                   </tbody>
                 </table>
               </div>

@@ -118,7 +118,7 @@ export default function SalesManagementApp() {
     payment_status: "unpaid" as "unpaid" | "paid" | "refunded",
     notes: "",
   })
-  const [invoiceItems, setInvoiceItems] = useState([{ product_name: "", imei: "", marque: "", modele: "", provenance: "", quantity: 1, unit_price: 0 }])
+  const [invoiceItems, setInvoiceItems] = useState<any[]>([{ product_name: "", imei: "", marque: "", modele: "", provenance: "", quantity: 1, unit_price: 0 }])
 
   const [showAddProductForm, setShowAddProductForm] = useState(false)
   const [editingProductId, setEditingProductId] = useState<string | null>(null)
@@ -225,16 +225,32 @@ export default function SalesManagementApp() {
         .select(
           `
         *,
-        invoice_items (*)
+        invoice_items (
+          *,
+          invoice_item_units (*)
+        )
       `,
         )
+        .eq("user_id", user?.id)
         .order("created_at", { ascending: false })
 
       if (error) {
         throw error
       }
 
-      setInvoices(data || [])
+      // Process the data to include units in the invoice_items
+      const processedData = data?.map(invoice => ({
+        ...invoice,
+        invoice_items: invoice.invoice_items?.map((item: any) => ({
+          ...item,
+          units: item.invoice_item_units?.sort((a: any, b: any) => a.unit_index - b.unit_index).map((unit: any) => ({
+            color: unit.color,
+            imei: unit.imei,
+          })) || undefined,
+        })),
+      })) || []
+
+      setInvoices(processedData)
     } catch (error) {
       console.error("Error fetching invoices:", error)
       setInvoices([])
@@ -344,7 +360,7 @@ export default function SalesManagementApp() {
         }
 
         const [salesResponse, productsResponse, invoicesResponse, settingsResponse] = await Promise.all([
-          supabase.from("sales").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
+          supabase.from("sales").select("*, invoices(invoice_number, status, payment_status)").eq("user_id", user.id).order("created_at", { ascending: false }),
           supabase.from("products").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
           supabase.from("invoices").select("*, invoice_items (*)").eq("user_id", user.id).order("created_at", { ascending: false }),
           supabase.from("company_settings").select("*").eq("user_id", user.id).limit(1).single(),
@@ -441,6 +457,34 @@ export default function SalesManagementApp() {
           return
         }
 
+        // Validate IMEI uniqueness for items with quantity >= 2
+        if (item.quantity >= 2 && item.units) {
+          const imeis = item.units.map((unit: any) => unit.imei.trim()).filter((imei: string) => imei)
+          const uniqueImeis = new Set(imeis)
+
+          if (imeis.length !== uniqueImeis.size) {
+            toast({
+              title: "Erreur de validation",
+              description: `Article ${i + 1}: Les IMEI doivent être uniques pour chaque unité`,
+              variant: "destructive",
+            })
+            return
+          }
+
+          // Check that all units have both color and IMEI
+          for (let j = 0; j < item.units.length; j++) {
+            const unit = item.units[j]
+            if (!unit.color.trim() || !unit.imei.trim()) {
+              toast({
+                title: "Erreur de validation",
+                description: `Article ${i + 1}, Unité ${j + 1}: La couleur et l'IMEI sont requis`,
+                variant: "destructive",
+              })
+              return
+            }
+          }
+        }
+
         // Validate stock availability
         if (item.product_name.trim()) {
           const product = products.find(p =>
@@ -501,7 +545,22 @@ export default function SalesManagementApp() {
           throw new Error(`Erreur lors de la modification de la facture: ${invoiceError.message}`)
         }
 
-        // Delete existing items and insert new ones
+        // Delete existing items and their units
+        const { data: existingItems } = await supabase
+          .from("invoice_items")
+          .select("id")
+          .eq("invoice_id", editingInvoiceId)
+          .eq("user_id", user.id)
+
+        if (existingItems) {
+          for (const item of existingItems) {
+            await supabase
+              .from("invoice_item_units")
+              .delete()
+              .eq("invoice_item_id", item.id)
+          }
+        }
+
         await supabase
           .from("invoice_items")
           .delete()
@@ -517,11 +576,17 @@ export default function SalesManagementApp() {
             quantity: item.quantity,
             unit_price: Math.round(item.unit_price * 100) / 100,
             total_price: Math.round((item.quantity * item.unit_price) * 100) / 100,
+            marque: item.marque?.trim() || null,
+            modele: item.modele?.trim() || null,
+            provenance: item.provenance?.trim() || null,
+            couleur: item.units && item.units.length > 0 ? item.units[0]?.color || null : null,
+            user_id: user.id,
           }))
 
-          const { error: itemsError } = await supabase
+          const { data: insertedItems, error: itemsError } = await supabase
             .from("invoice_items")
             .insert(itemsToInsert)
+            .select()
 
           if (itemsError) {
             toast({
@@ -529,6 +594,34 @@ export default function SalesManagementApp() {
               description: "La facture a été modifiée mais certains articles n'ont pas pu être mis à jour",
               variant: "default",
             })
+          } else if (insertedItems) {
+            // Insert unit details for items with quantity >= 2
+            for (let i = 0; i < validItems.length; i++) {
+              const item = validItems[i]
+              const insertedItem = insertedItems[i]
+
+              if (item.units && item.units.length > 0) {
+                const unitsToInsert = item.units.map((unit: any, unitIndex: number) => ({
+                  invoice_item_id: insertedItem.id,
+                  unit_index: unitIndex,
+                  color: unit.color.trim(),
+                  imei: unit.imei.trim(),
+                }))
+
+                const { error: unitsError } = await supabase
+                  .from("invoice_item_units")
+                  .insert(unitsToInsert)
+
+                if (unitsError) {
+                  console.error("Invoice item units insertion error:", unitsError)
+                  toast({
+                    title: "Avertissement",
+                    description: "Les détails des unités n'ont pas pu être mis à jour",
+                    variant: "default",
+                  })
+                }
+              }
+            }
           }
         }
 
@@ -608,13 +701,19 @@ export default function SalesManagementApp() {
                 quantity: item.quantity,
                 unit_price: Math.round(item.unit_price * 100) / 100,
                 total_price: Math.round((item.quantity * item.unit_price) * 100) / 100,
+                marque: item.marque?.trim() || null,
+                modele: item.modele?.trim() || null,
+                provenance: item.provenance?.trim() || null,
+                couleur: item.units && item.units.length > 0 ? item.units[0]?.color || null : null,
+                user_id: user.id,
               }))
 
               console.log("Inserting invoice items:", itemsToInsert)
 
-              const { error: itemsError } = await supabase
+              const { data: insertedItems, error: itemsError } = await supabase
                 .from("invoice_items")
                 .insert(itemsToInsert)
+                .select()
 
               if (itemsError) {
                 console.error("Invoice items insertion error:", itemsError)
@@ -622,6 +721,34 @@ export default function SalesManagementApp() {
               }
 
               console.log("Invoice items created successfully")
+
+              // Insert unit details for items with quantity >= 2
+              for (let i = 0; i < validItems.length; i++) {
+                const item = validItems[i]
+                const insertedItem = insertedItems?.[i]
+
+                if (item.units && item.units.length > 0 && insertedItem) {
+                  const unitsToInsert = item.units.map((unit: any, unitIndex: number) => ({
+                    invoice_item_id: insertedItem.id,
+                    unit_index: unitIndex,
+                    color: unit.color.trim(),
+                    imei: unit.imei.trim(),
+                  }))
+
+                  console.log("Inserting invoice item units:", unitsToInsert)
+
+                  const { error: unitsError } = await supabase
+                    .from("invoice_item_units")
+                    .insert(unitsToInsert)
+
+                  if (unitsError) {
+                    console.error("Invoice item units insertion error:", unitsError)
+                    throw new Error(`Erreur lors de l'ajout des détails des unités: ${unitsError.message}`)
+                  }
+
+                  console.log("Invoice item units created successfully")
+                }
+              }
             }
 
             return invoice
@@ -765,6 +892,23 @@ export default function SalesManagementApp() {
     setInvoiceItems((prev) => {
       const updated = [...prev]
       updated[index] = { ...updated[index], [field]: value }
+      return updated
+    })
+  }, [])
+
+  const handleInvoiceItemUnitChange = useCallback((itemIndex: number, unitIndex: number, field: string, value: string) => {
+    setInvoiceItems((prev) => {
+      const updated = [...prev]
+      if (!updated[itemIndex].units) {
+        updated[itemIndex].units = []
+      }
+      if (!updated[itemIndex].units![unitIndex]) {
+        updated[itemIndex].units![unitIndex] = { color: "", imei: "" }
+      }
+      updated[itemIndex].units![unitIndex] = {
+        ...updated[itemIndex].units![unitIndex],
+        [field]: value
+      }
       return updated
     })
   }, [])
@@ -921,6 +1065,7 @@ export default function SalesManagementApp() {
         provenance: item.provenance || "",
         quantity: item.quantity,
         unit_price: item.unit_price,
+        units: item.units, // Include units if they exist
       })))
     }
 
@@ -1956,7 +2101,7 @@ export default function SalesManagementApp() {
     if (!user) return
 
     // Validation
-    if (!tempSettings.companyName.trim()) {
+    if (!tempSettings.nom_compagnie.trim()) {
       toast({
         title: "Erreur de validation",
         description: "Le nom de l'entreprise est requis",
@@ -1965,7 +2110,7 @@ export default function SalesManagementApp() {
       return
     }
 
-    if (!tempSettings.adminName.trim()) {
+    if (!tempSettings.nom_admin.trim()) {
       toast({
         title: "Erreur de validation",
         description: "Le nom de l'administrateur est requis",
@@ -1975,7 +2120,7 @@ export default function SalesManagementApp() {
     }
 
     try {
-      let logoUrl = tempSettings.logoUrl
+      let logoUrl = tempSettings.logo_url
 
       if (logoFile) {
         const fileExt = logoFile.name.split(".").pop()
@@ -2139,9 +2284,9 @@ export default function SalesManagementApp() {
         return
       }
 
-      // Create sale with transaction safety
+      // Create sale and invoice with transaction safety
       const saleResult = await executeTransactionWithRollback(
-        // Main operation: create sale
+        // Main operation: create sale and auto-generate invoice
         async () => {
           // Prepare sale data excluding nom_produit (not in sales table schema)
           const saleData = {
@@ -2163,11 +2308,94 @@ export default function SalesManagementApp() {
           if (error) throw error
           if (!data || !data[0]) throw new Error("Échec de la création de la vente")
 
-          return data[0]
+          const createdSale = data[0]
+
+          // Auto-generate invoice for the sale
+          const invoiceNumber = `INV-SALE-${createdSale.id.slice(-6).toUpperCase()}`
+
+          const invoiceData = {
+            invoice_number: invoiceNumber,
+            client_name: saleFormData.nom_prenom_client,
+            client_email: null,
+            client_phone: saleFormData.numero_telephone,
+            client_address: null,
+            invoice_date: new Date().toISOString(),
+            due_date: null,
+            subtotal: Number.parseInt(saleFormData.prix),
+            tax_rate: 18, // Default tax rate
+            tax_amount: Math.round(Number.parseInt(saleFormData.prix) * 0.18),
+            total_amount: Math.round(Number.parseInt(saleFormData.prix) * 1.18),
+            status: "pending", // As requested by user
+            payment_status: "unpaid",
+            notes: `Facture générée automatiquement pour la vente ${createdSale.id}`,
+            sales_id: createdSale.id, // Link to the sale
+            user_id: user.id,
+          }
+
+          const { data: invoiceResult, error: invoiceError } = await supabase
+            .from("invoices")
+            .insert([invoiceData])
+            .select()
+
+          if (invoiceError) throw invoiceError
+          if (!invoiceResult || !invoiceResult[0]) throw new Error("Échec de la création de la facture")
+
+          // Update sale with invoice_id
+          await supabase
+            .from("sales")
+            .update({ invoice_id: invoiceResult[0].id })
+            .eq("id", createdSale.id)
+            .eq("user_id", user.id)
+
+          // Create invoice item
+          const invoiceItemData = {
+            invoice_id: invoiceResult[0].id,
+            product_name: `${saleFormData.marque} ${saleFormData.modele}`,
+            imei: saleFormData.imei_telephone,
+            quantity: 1,
+            unit_price: Number.parseInt(saleFormData.prix),
+            total_price: Number.parseInt(saleFormData.prix),
+            marque: saleFormData.marque,
+            modele: saleFormData.modele,
+            provenance: null,
+          }
+
+          const { error: itemError } = await supabase
+            .from("invoice_items")
+            .insert([invoiceItemData])
+
+          if (itemError) throw itemError
+
+          return { ...createdSale, invoice_id: invoiceResult[0].id }
         },
-        // Rollback operation: delete sale if stock deduction fails
+        // Rollback operation: delete sale and related invoice if stock deduction fails
         async (createdSale: any) => {
-          console.log("Rolling back sale creation:", createdSale.id)
+          console.log("Rolling back sale and invoice creation:", createdSale.id)
+
+          // Delete invoice items first
+          const { data: invoice } = await supabase
+            .from("invoices")
+            .select("id")
+            .eq("sales_id", createdSale.id)
+            .eq("user_id", user.id)
+            .single()
+
+          if (invoice) {
+            await supabase
+              .from("invoice_items")
+              .delete()
+              .eq("invoice_id", invoice.id)
+              .eq("user_id", user.id)
+
+            // Delete invoice
+            await supabase
+              .from("invoices")
+              .delete()
+              .eq("id", invoice.id)
+              .eq("user_id", user.id)
+          }
+
+          // Delete sale
           await supabase
             .from("sales")
             .delete()
@@ -2221,6 +2449,22 @@ export default function SalesManagementApp() {
     if (!user) return
 
     try {
+      // First delete associated invoice if it exists
+      const saleToDelete = ventes.find(v => v.id === id)
+      if (saleToDelete?.invoice) {
+        const { error: invoiceError } = await supabase
+          .from("invoices")
+          .delete()
+          .eq("sales_id", id)
+          .eq("user_id", user.id)
+
+        if (invoiceError) {
+          console.error("Error deleting associated invoice:", invoiceError)
+          // Continue with sale deletion even if invoice deletion fails
+        }
+      }
+
+      // Then delete the sale
       const { error } = await supabase
         .from("sales")
         .delete()
@@ -2233,7 +2477,7 @@ export default function SalesManagementApp() {
       setSuccessModal({
         isOpen: true,
         message: "Vente supprimée avec succès!",
-        subMessage: "La vente a été supprimée de vos enregistrements.",
+        subMessage: "La vente et sa facture associée ont été supprimées du système.",
       })
     } catch (error) {
       console.error("Error deleting sale:", error)
@@ -2596,57 +2840,116 @@ export default function SalesManagementApp() {
                               </tr>
                             </thead>
                             <tbody>
-                              {invoiceItemsForPrint.map((item, index) => (
-                                <tr key={index} style={{
-                                  borderBottom: '1px solid #e2e8f0',
-                                  transition: 'background-color 0.2s ease'
-                                }}>
-                                  <td style={{padding: '16px 20px', verticalAlign: 'top'}}>
-                                    <div style={{
-                                      fontWeight: 600,
-                                      color: '#2d3748',
-                                      marginBottom: '4px'
-                                    }}>{item.product_name}</div>
-                                  </td>
-                                  <td style={{padding: '16px 20px', verticalAlign: 'top'}}>
-                                    <div style={{
-                                      fontSize: '14px',
-                                      color: '#718096',
-                                      lineHeight: '1.4'
+                              {invoiceItemsForPrint.map((item, index) => {
+                                // If item has units (quantity >= 2), display each unit separately
+                                if (item.units && item.units.length > 0) {
+                                  return item.units.map((unit, unitIndex) => (
+                                    <tr key={`${index}-${unitIndex}`} style={{
+                                      borderBottom: '1px solid #e2e8f0',
+                                      transition: 'background-color 0.2s ease'
                                     }}>
-                                      {item.marque && <div><strong>Marque:</strong> {item.marque}</div>}
-                                      {item.modele && <div><strong>Modèle:</strong> {item.modele}</div>}
-                                      {item.imei && <div><strong>SN:</strong> {item.imei}</div>}
-                                      {item.provenance && <div><strong>Provenance:</strong> {item.provenance}</div>}
-                                    </div>
-                                  </td>
-                                  <td style={{padding: '16px 20px', verticalAlign: 'top'}}>
-                                    <span style={{
-                                      background: '#e6fffa',
-                                      color: '#065f46',
-                                      padding: '4px 8px',
-                                      borderRadius: '12px',
-                                      fontSize: '12px',
-                                      fontWeight: 600,
-                                      display: 'inline-block'
-                                    }}>{item.quantity}</span>
-                                  </td>
-                                  <td style={{
-                                    padding: '16px 20px',
-                                    verticalAlign: 'top',
-                                    fontWeight: 600,
-                                    color: '#2d3748',
-                                    textAlign: 'right'
-                                  }}>{item.unit_price.toLocaleString("fr-FR")} FCFA</td>
-                                  <td style={{
-                                    padding: '16px 20px',
-                                    verticalAlign: 'top',
-                                    fontWeight: 600,
-                                    color: '#2d3748',
-                                    textAlign: 'right'
-                                  }}>{(item.quantity * item.unit_price).toLocaleString("fr-FR")} FCFA</td>
-                                </tr>
-                              ))}
+                                      <td style={{padding: '16px 20px', verticalAlign: 'top'}}>
+                                        <div style={{
+                                          fontWeight: 600,
+                                          color: '#2d3748',
+                                          marginBottom: '4px'
+                                        }}>{item.product_name} - Unité {unitIndex + 1}</div>
+                                      </td>
+                                      <td style={{padding: '16px 20px', verticalAlign: 'top'}}>
+                                        <div style={{
+                                          fontSize: '14px',
+                                          color: '#718096',
+                                          lineHeight: '1.4'
+                                        }}>
+                                          {item.marque && <div><strong>Marque:</strong> {item.marque}</div>}
+                                          {item.modele && <div><strong>Modèle:</strong> {item.modele}</div>}
+                                          <div><strong>Couleur:</strong> {unit.color}</div>
+                                          <div><strong>SN:</strong> {unit.imei}</div>
+                                          {item.provenance && <div><strong>Provenance:</strong> {item.provenance}</div>}
+                                        </div>
+                                      </td>
+                                      <td style={{padding: '16px 20px', verticalAlign: 'top'}}>
+                                        <span style={{
+                                          background: '#e6fffa',
+                                          color: '#065f46',
+                                          padding: '4px 8px',
+                                          borderRadius: '12px',
+                                          fontSize: '12px',
+                                          fontWeight: 600,
+                                          display: 'inline-block'
+                                        }}>1</span>
+                                      </td>
+                                      <td style={{
+                                        padding: '16px 20px',
+                                        verticalAlign: 'top',
+                                        fontWeight: 600,
+                                        color: '#2d3748',
+                                        textAlign: 'right'
+                                      }}>{item.unit_price.toLocaleString("fr-FR")} FCFA</td>
+                                      <td style={{
+                                        padding: '16px 20px',
+                                        verticalAlign: 'top',
+                                        fontWeight: 600,
+                                        color: '#2d3748',
+                                        textAlign: 'right'
+                                      }}>{item.unit_price.toLocaleString("fr-FR")} FCFA</td>
+                                    </tr>
+                                  ));
+                                } else {
+                                  // Original behavior for items without units
+                                  return (
+                                    <tr key={index} style={{
+                                      borderBottom: '1px solid #e2e8f0',
+                                      transition: 'background-color 0.2s ease'
+                                    }}>
+                                      <td style={{padding: '16px 20px', verticalAlign: 'top'}}>
+                                        <div style={{
+                                          fontWeight: 600,
+                                          color: '#2d3748',
+                                          marginBottom: '4px'
+                                        }}>{item.product_name}</div>
+                                      </td>
+                                      <td style={{padding: '16px 20px', verticalAlign: 'top'}}>
+                                        <div style={{
+                                          fontSize: '14px',
+                                          color: '#718096',
+                                          lineHeight: '1.4'
+                                        }}>
+                                          {item.marque && <div><strong>Marque:</strong> {item.marque}</div>}
+                                          {item.modele && <div><strong>Modèle:</strong> {item.modele}</div>}
+                                          {item.imei && <div><strong>SN:</strong> {item.imei}</div>}
+                                          {item.provenance && <div><strong>Provenance:</strong> {item.provenance}</div>}
+                                        </div>
+                                      </td>
+                                      <td style={{padding: '16px 20px', verticalAlign: 'top'}}>
+                                        <span style={{
+                                          background: '#e6fffa',
+                                          color: '#065f46',
+                                          padding: '4px 8px',
+                                          borderRadius: '12px',
+                                          fontSize: '12px',
+                                          fontWeight: 600,
+                                          display: 'inline-block'
+                                        }}>{item.quantity}</span>
+                                      </td>
+                                      <td style={{
+                                        padding: '16px 20px',
+                                        verticalAlign: 'top',
+                                        fontWeight: 600,
+                                        color: '#2d3748',
+                                        textAlign: 'right'
+                                      }}>{item.unit_price.toLocaleString("fr-FR")} FCFA</td>
+                                      <td style={{
+                                        padding: '16px 20px',
+                                        verticalAlign: 'top',
+                                        fontWeight: 600,
+                                        color: '#2d3748',
+                                        textAlign: 'right'
+                                      }}>{(item.quantity * item.unit_price).toLocaleString("fr-FR")} FCFA</td>
+                                    </tr>
+                                  );
+                                }
+                              }).flat()}
                             </tbody>
                           </table>
                         </div>
@@ -3090,6 +3393,7 @@ export default function SalesManagementApp() {
               handleInvoiceFormChange={handleInvoiceFormChange}
               invoiceItems={invoiceItems}
               handleInvoiceItemChange={handleInvoiceItemChange}
+              handleInvoiceItemUnitChange={handleInvoiceItemUnitChange}
               addInvoiceItem={addInvoiceItem}
               removeInvoiceItem={removeInvoiceItem}
               handleAddInvoice={handleAddInvoice}

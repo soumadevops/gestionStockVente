@@ -30,15 +30,19 @@ interface Invoice {
   updated_at: string
 }
 
-interface InvoiceItem {
-  product_name: string
-  imei?: string
-  marque?: string
-  modele?: string
-  provenance?: string
-  quantity: number
-  unit_price: number
-}
+interface InvoiceItemForm {
+     product_name: string
+     imei?: string
+     marque?: string
+     modele?: string
+     provenance?: string
+     quantity: number
+     unit_price: number
+     units?: Array<{
+       color: string
+       imei: string
+     }>
+  }
 
 interface Product {
    id: string
@@ -53,54 +57,56 @@ interface Product {
  }
 
 interface InvoicesViewProps {
-   invoices: Invoice[]
-   showAddInvoiceForm: boolean
-   setShowAddInvoiceForm: (show: boolean) => void
-   editingInvoiceId: string | null
-   onEditInvoice: (invoiceId: string) => void
-   invoiceFormData: any
-   handleInvoiceFormChange: (field: string, value: string) => void
-   invoiceItems: InvoiceItem[]
-   handleInvoiceItemChange: (index: number, field: string, value: any) => void
-   addInvoiceItem: () => void
-   removeInvoiceItem: (index: number) => void
-   handleAddInvoice: () => void
-   resetInvoiceForm: () => void
-   printInvoice: (invoice: Invoice) => void
-   handleDeleteInvoice: (id: string) => void
-   isSubmitting?: boolean
-   products?: Product[]
-   onProductSelect?: (index: number, product: Product) => void
-   invoiceSearchTerm: string
-   setInvoiceSearchTerm: (term: string) => void
-   invoiceStatusFilter: string
-   setInvoiceStatusFilter: (status: string) => void
- }
+     invoices: Invoice[]
+     showAddInvoiceForm: boolean
+     setShowAddInvoiceForm: (show: boolean) => void
+     editingInvoiceId: string | null
+     onEditInvoice: (invoiceId: string) => void
+     invoiceFormData: any
+     handleInvoiceFormChange: (field: string, value: string) => void
+     invoiceItems: InvoiceItemForm[]
+     handleInvoiceItemChange: (index: number, field: string, value: any) => void
+     handleInvoiceItemUnitChange?: (itemIndex: number, unitIndex: number, field: string, value: string) => void
+     addInvoiceItem: () => void
+     removeInvoiceItem: (index: number) => void
+     handleAddInvoice: () => Promise<void>
+     resetInvoiceForm: () => void
+     printInvoice: (invoice: Invoice) => void
+     handleDeleteInvoice: (id: string) => Promise<void>
+     isSubmitting?: boolean
+     products?: Product[]
+     onProductSelect?: (index: number, product: Product) => void
+     invoiceSearchTerm: string
+     setInvoiceSearchTerm: (term: string) => void
+     invoiceStatusFilter: string
+     setInvoiceStatusFilter: (status: string) => void
+   }
 
-export const InvoicesView = React.memo(function InvoicesView({
-   invoices,
-   showAddInvoiceForm,
-   setShowAddInvoiceForm,
-   editingInvoiceId,
-   onEditInvoice,
-   invoiceFormData,
-   handleInvoiceFormChange,
-   invoiceItems,
-   handleInvoiceItemChange,
-   addInvoiceItem,
-   removeInvoiceItem,
-   handleAddInvoice,
-   resetInvoiceForm,
-   printInvoice,
-   handleDeleteInvoice,
-   isSubmitting = false,
-   products = [],
-   onProductSelect,
-   invoiceSearchTerm,
-   setInvoiceSearchTerm,
-   invoiceStatusFilter,
-   setInvoiceStatusFilter
- }: InvoicesViewProps) {
+export const InvoicesView = function InvoicesView({
+    invoices,
+    showAddInvoiceForm,
+    setShowAddInvoiceForm,
+    editingInvoiceId,
+    onEditInvoice,
+    invoiceFormData,
+    handleInvoiceFormChange,
+    invoiceItems,
+    handleInvoiceItemChange,
+    handleInvoiceItemUnitChange,
+    addInvoiceItem,
+    removeInvoiceItem,
+    handleAddInvoice,
+    resetInvoiceForm,
+    printInvoice,
+    handleDeleteInvoice,
+    isSubmitting = false,
+    products = [],
+    onProductSelect,
+    invoiceSearchTerm,
+    setInvoiceSearchTerm,
+    invoiceStatusFilter,
+    setInvoiceStatusFilter
+  }: InvoicesViewProps) {
   // Auto-save functionality
   const autoSaveKey = `invoice_draft_${editingInvoiceId || 'new'}`
 
@@ -137,6 +143,36 @@ export const InvoicesView = React.memo(function InvoicesView({
     const interval = setInterval(saveDraft, 30000) // 30 seconds
     return () => clearInterval(interval)
   }, [showAddInvoiceForm, saveDraft])
+
+  // IMEI validation
+  const validateIMEIUniqueness = (items: InvoiceItemForm[], currentIndex: number, imei: string): boolean => {
+    if (!imei.trim()) return true // Empty IMEI is allowed
+
+    // Collect all IMEIs from all items and their units
+    const allIMEIs: string[] = []
+
+    items.forEach((item, index) => {
+      // Add main item IMEI if it exists
+      if (item.imei?.trim()) {
+        allIMEIs.push(item.imei.trim())
+      }
+
+      // Add unit IMEIs if they exist
+      if (item.units) {
+        item.units.forEach(unit => {
+          if (unit.imei?.trim()) {
+            allIMEIs.push(unit.imei.trim())
+          }
+        })
+      }
+    })
+
+    // Count occurrences of this IMEI
+    const imeiCount = allIMEIs.filter(existingIMEI => existingIMEI === imei.trim()).length
+
+    // Allow if this is the only occurrence
+    return imeiCount <= 1
+  }
 
   // Save on form changes
   useEffect(() => {
@@ -372,151 +408,232 @@ export const InvoicesView = React.memo(function InvoicesView({
                     ) : (
                       <div className="space-y-3">
                         {invoiceItems.map((item, index) => (
-                           <div key={index} className="p-4 border border-border rounded-lg bg-muted/20 hover:bg-muted/30 transition-colors">
-                             {/* Product Selection */}
-                             <div className="mb-3">
-                               <Label className="text-xs text-muted-foreground mb-1 block">
-                                 Sélectionner un produit du stock
-                               </Label>
-                               <Select
-                                 value=""
-                                 onValueChange={(productId) => {
-                                   const selectedProduct = products.find(p => p.id === productId)
-                                   if (selectedProduct && onProductSelect) {
-                                     onProductSelect(index, selectedProduct)
-                                   }
-                                 }}
-                               >
-                                 <SelectTrigger className="bg-background border-border text-foreground text-sm">
-                                   <SelectValue placeholder="Choisir un produit du stock..." />
-                                 </SelectTrigger>
-                                 <SelectContent>
-                                   {products.filter(p => p.quantite_stock > 0).map((product) => (
-                                     <SelectItem key={product.id} value={product.id}>
-                                       {product.nom_produit} - {product.marque} {product.couleur} (Stock: {product.quantite_stock})
-                                     </SelectItem>
-                                   ))}
-                                 </SelectContent>
-                               </Select>
-                             </div>
+                          <div key={index} className="p-4 border border-border rounded-lg bg-muted/20 hover:bg-muted/30 transition-colors">
+                            {/* Product Selection */}
+                            <div className="mb-3">
+                              <Label className="text-xs text-muted-foreground mb-1 block">
+                                Sélectionner un produit du stock
+                              </Label>
+                              <Select
+                                value=""
+                                onValueChange={(productId) => {
+                                  const selectedProduct = products.find(p => p.id === productId)
+                                  if (selectedProduct && onProductSelect) {
+                                    onProductSelect(index, selectedProduct)
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="bg-background border-border text-foreground text-sm">
+                                  <SelectValue placeholder="Choisir un produit du stock..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {products.filter(p => p.quantite_stock > 0).map((product) => (
+                                    <SelectItem key={product.id} value={product.id}>
+                                      {product.nom_produit} - {product.marque} {product.couleur} (Stock: {product.quantite_stock})
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
 
-                             <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-                               <div className="md:col-span-2">
-                                 <Label className="text-xs text-muted-foreground mb-1 block">
-                                   Produit/Service *
-                                 </Label>
-                                 <Input
-                                   placeholder="Nom du produit"
-                                   value={item.product_name}
-                                   onChange={(e) => handleInvoiceItemChange(index, "product_name", e.target.value)}
-                                   className={`bg-background border-border text-foreground text-sm ${
-                                     !item.product_name ? 'border-orange-300' : ''
-                                   }`}
-                                   required
-                                 />
-                               </div>
-                               <div className="md:col-span-2">
-                                 <Label className="text-xs text-muted-foreground mb-1 block">
-                                   Marque
-                                 </Label>
-                                 <Input
-                                   placeholder="Marque"
-                                   value={item.marque || ""}
-                                   onChange={(e) => handleInvoiceItemChange(index, "marque", e.target.value)}
-                                   className="bg-background border-border text-foreground text-sm"
-                                 />
-                               </div>
-                               <div className="md:col-span-2">
-                                 <Label className="text-xs text-muted-foreground mb-1 block">
-                                   Modèle
-                                 </Label>
-                                 <Input
-                                   placeholder="Modèle"
-                                   value={item.modele || ""}
-                                   onChange={(e) => handleInvoiceItemChange(index, "modele", e.target.value)}
-                                   className="bg-background border-border text-foreground text-sm"
-                                 />
-                               </div>
-                               <div className="md:col-span-2">
-                                 <Label className="text-xs text-muted-foreground mb-1 block">
-                                   IMEI
-                                 </Label>
-                                 <Input
-                                   placeholder="IMEI"
-                                   value={item.imei || ""}
-                                   onChange={(e) => handleInvoiceItemChange(index, "imei", e.target.value)}
-                                   className="bg-background border-border text-foreground text-sm"
-                                 />
-                               </div>
-                               <div className="md:col-span-1">
-                                 <Label className="text-xs text-muted-foreground mb-1 block">
-                                   Quantité *
-                                 </Label>
-                                 <Input
-                                   type="number"
-                                   placeholder="1"
-                                   value={item.quantity}
-                                   onChange={(e) => handleInvoiceItemChange(index, "quantity", Math.max(1, Number.parseInt(e.target.value) || 1))}
-                                   className="bg-background border-border text-foreground text-sm"
-                                   min="1"
-                                   required
-                                 />
-                               </div>
-                               <div className="md:col-span-2">
-                                 <Label className="text-xs text-muted-foreground mb-1 block">
-                                   Prix Unit. (FCFA) *
-                                 </Label>
-                                 <Input
-                                   type="number"
-                                   step="0.01"
-                                   placeholder="0.00"
-                                   value={item.unit_price}
-                                   onChange={(e) =>
-                                     handleInvoiceItemChange(index, "unit_price", Math.max(0, Number.parseFloat(e.target.value) || 0))
-                                   }
-                                   className="bg-background border-border text-foreground text-sm"
-                                   min="0"
-                                   required
-                                 />
-                               </div>
-                               <div className="md:col-span-1">
-                                 <div className="flex items-center justify-between h-9">
-                                   <div className="text-sm font-medium text-primary">
-                                     {(item.quantity * item.unit_price).toLocaleString("fr-FR")}
-                                   </div>
-                                 </div>
-                               </div>
-                             </div>
-                             <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mt-3">
-                               <div className="md:col-span-6">
-                                 <Label className="text-xs text-muted-foreground mb-1 block">
-                                   Provenance
-                                 </Label>
-                                 <Input
-                                   placeholder="Provenance"
-                                   value={item.provenance || ""}
-                                   onChange={(e) => handleInvoiceItemChange(index, "provenance", e.target.value)}
-                                   className="bg-background border-border text-foreground text-sm"
-                                 />
-                               </div>
-                               <div className="md:col-span-5">
-                                 <div className="flex items-center justify-end h-9">
-                                   {invoiceItems.length > 1 && (
-                                     <Button
-                                       type="button"
-                                       onClick={() => removeInvoiceItem(index)}
-                                       variant="ghost"
-                                       size="sm"
-                                       className="text-red-500 hover:text-red-700 hover:bg-red-50 h-9 w-9 p-0"
-                                     >
-                                       <Trash2 className="w-4 h-4" />
-                                     </Button>
-                                   )}
-                                 </div>
-                               </div>
-                             </div>
-                           </div>
-                         ))}
+                            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                              <div className="md:col-span-2">
+                                <Label className="text-xs text-muted-foreground mb-1 block">
+                                  Produit/Service *
+                                </Label>
+                                <Input
+                                  placeholder="Nom du produit"
+                                  value={item.product_name}
+                                  onChange={(e) => handleInvoiceItemChange(index, "product_name", e.target.value)}
+                                  className={`bg-background border-border text-foreground text-sm ${
+                                    !item.product_name ? 'border-orange-300' : ''
+                                  }`}
+                                  required
+                                />
+                              </div>
+                              <div className="md:col-span-2">
+                                <Label className="text-xs text-muted-foreground mb-1 block">
+                                  Marque
+                                </Label>
+                                <Input
+                                  placeholder="Marque"
+                                  value={item.marque || ""}
+                                  onChange={(e) => handleInvoiceItemChange(index, "marque", e.target.value)}
+                                  className="bg-background border-border text-foreground text-sm"
+                                />
+                              </div>
+                              <div className="md:col-span-2">
+                                <Label className="text-xs text-muted-foreground mb-1 block">
+                                  Modèle
+                                </Label>
+                                <Input
+                                  placeholder="Modèle"
+                                  value={item.modele || ""}
+                                  onChange={(e) => handleInvoiceItemChange(index, "modele", e.target.value)}
+                                  className="bg-background border-border text-foreground text-sm"
+                                />
+                              </div>
+                              <div className="md:col-span-2">
+                                <Label className="text-xs text-muted-foreground mb-1 block">
+                                  IMEI
+                                </Label>
+                                <Input
+                                  placeholder="IMEI"
+                                  value={item.imei || ""}
+                                  onChange={(e) => {
+                                    const newIMEI = e.target.value
+                                    handleInvoiceItemChange(index, "imei", newIMEI)
+                                  }}
+                                  className={`bg-background border-border text-foreground text-sm ${
+                                    item.imei && !validateIMEIUniqueness(invoiceItems, index, item.imei)
+                                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                                      : ''
+                                  }`}
+                                />
+                                {item.imei && !validateIMEIUniqueness(invoiceItems, index, item.imei) && (
+                                  <p className="text-xs text-red-600 mt-1">IMEI déjà utilisé dans cette facture</p>
+                                )}
+                              </div>
+                              <div className="md:col-span-1">
+                                <Label className="text-xs text-muted-foreground mb-1 block">
+                                  Quantité *
+                                </Label>
+                                <Input
+                                  type="number"
+                                  placeholder="1"
+                                  value={item.quantity}
+                                  onChange={(e) => {
+                                    const newQuantity = Math.max(1, Number.parseInt(e.target.value) || 1)
+                                    handleInvoiceItemChange(index, "quantity", newQuantity)
+                                    // Initialize units array if quantity >= 2
+                                    if (newQuantity >= 2 && (!item.units || item.units.length !== newQuantity)) {
+                                      const units = Array.from({ length: newQuantity }, (_, i) => ({
+                                        color: item.modele || "",
+                                        imei: ""
+                                      }))
+                                      handleInvoiceItemChange(index, "units", units)
+                                    } else if (newQuantity < 2) {
+                                      handleInvoiceItemChange(index, "units", undefined)
+                                    }
+                                  }}
+                                  className="bg-background border-border text-foreground text-sm"
+                                  min="1"
+                                  required
+                                />
+                              </div>
+                              <div className="md:col-span-2">
+                                <Label className="text-xs text-muted-foreground mb-1 block">
+                                  Prix Unit. (FCFA) *
+                                </Label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  value={item.unit_price}
+                                  onChange={(e) =>
+                                    handleInvoiceItemChange(index, "unit_price", Math.max(0, Number.parseFloat(e.target.value) || 0))
+                                  }
+                                  className="bg-background border-border text-foreground text-sm"
+                                  min="0"
+                                  required
+                                />
+                              </div>
+                              <div className="md:col-span-1">
+                                <div className="flex items-center justify-between h-9">
+                                  <div className="text-sm font-medium text-primary">
+                                    {(item.quantity * item.unit_price).toLocaleString("fr-FR")}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mt-3">
+                              <div className="md:col-span-6">
+                                <Label className="text-xs text-muted-foreground mb-1 block">
+                                  Provenance
+                                </Label>
+                                <Input
+                                  placeholder="Provenance"
+                                  value={item.provenance || ""}
+                                  onChange={(e) => handleInvoiceItemChange(index, "provenance", e.target.value)}
+                                  className="bg-background border-border text-foreground text-sm"
+                                />
+                              </div>
+                              <div className="md:col-span-5">
+                                <div className="flex items-center justify-end h-9">
+                                  {invoiceItems.length > 1 && (
+                                    <Button
+                                      type="button"
+                                      onClick={() => removeInvoiceItem(index)}
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-red-500 hover:text-red-700 hover:bg-red-50 h-9 w-9 p-0"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Unit Details Section - Only show when quantity >= 2 */}
+                            {item.quantity >= 2 && item.units && (
+                              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <Package className="w-4 h-4 text-blue-600" />
+                                  <h4 className="font-medium text-blue-800 text-sm">Détails des unités individuelles</h4>
+                                </div>
+                                <div className="space-y-3">
+                                  {item.units.map((unit, unitIndex) => (
+                                    <div key={unitIndex} className="p-3 bg-white border border-blue-100 rounded-md">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
+                                          <span className="text-xs font-bold text-blue-600">{unitIndex + 1}</span>
+                                        </div>
+                                        <span className="text-sm font-medium text-blue-800">Unité {unitIndex + 1}</span>
+                                      </div>
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div>
+                                          <Label className="text-xs text-blue-700 mb-1 block">
+                                            Couleur *
+                                          </Label>
+                                          <Input
+                                            placeholder="Couleur de l'unité"
+                                            value={unit.color}
+                                            onChange={(e) => handleInvoiceItemUnitChange?.(index, unitIndex, "color", e.target.value)}
+                                            className="bg-white border-blue-200 text-foreground text-sm"
+                                            required
+                                          />
+                                        </div>
+                                        <div>
+                                          <Label className="text-xs text-blue-700 mb-1 block">
+                                            IMEI *
+                                          </Label>
+                                          <Input
+                                            placeholder="IMEI de l'unité"
+                                            value={unit.imei}
+                                            onChange={(e) => handleInvoiceItemUnitChange?.(index, unitIndex, "imei", e.target.value)}
+                                            className={`bg-white border-blue-200 text-foreground text-sm ${
+                                              unit.imei && !validateIMEIUniqueness(invoiceItems, index, unit.imei)
+                                                ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                                                : ''
+                                            }`}
+                                            required
+                                          />
+                                          {unit.imei && !validateIMEIUniqueness(invoiceItems, index, unit.imei) && (
+                                            <p className="text-xs text-red-600 mt-1">IMEI déjà utilisé dans cette facture</p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="mt-3 text-xs text-blue-600">
+                                  <strong>Note:</strong> Chaque IMEI doit être unique pour cette facture.
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -954,4 +1071,4 @@ export const InvoicesView = React.memo(function InvoicesView({
       </div>
     </div>
   )
-})
+}

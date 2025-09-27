@@ -1,16 +1,21 @@
 export interface Sale {
-   id: string
-   nom_prenom_client: string
-   numero_telephone: string
-   date_vente: string
-   nom_produit?: string
-   modele: string
-   marque: string
-   imei_telephone: string
-   prix: number
-   created_at?: string
-   updated_at?: string
- }
+    id: string
+    nom_prenom_client: string
+    numero_telephone: string
+    date_vente: string
+    nom_produit?: string
+    modele: string
+    marque: string
+    imei_telephone: string
+    prix: number
+    created_at?: string
+    updated_at?: string
+    invoice?: {
+      invoice_number: string
+      status: string
+      payment_status: string
+    }
+  }
 
 export interface Product {
   id: string
@@ -97,6 +102,10 @@ export interface InvoiceItem {
   quantity: number
   unit_price: number
   total_price: number
+  units?: Array<{
+    color: string
+    imei: string
+  }>
 }
 
 export interface FormData {
@@ -129,6 +138,20 @@ export interface InvoiceFormData {
   tax_rate: string
   payment_status: "unpaid" | "paid" | "refunded"
   notes: string
+}
+
+export interface InvoiceItemFormData {
+  product_name: string
+  imei?: string
+  marque?: string
+  modele?: string
+  provenance?: string
+  quantity: number
+  unit_price: number
+  units?: Array<{
+    color: string
+    imei: string
+  }>
 }
 
 export interface SuccessModalState {

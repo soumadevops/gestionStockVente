@@ -19,6 +19,11 @@ interface Sale {
   imei_telephone: string
   prix: number
   created_at?: string
+  invoice?: {
+    invoice_number: string
+    status: string
+    payment_status: string
+  }
 }
 
 interface Product {
@@ -575,6 +580,38 @@ export const SalesView = React.memo(function SalesView({
                       </span>
                       <span className="text-xs col-span-full">IMEI: {vente.imei_telephone}</span>
                     </div>
+
+                    {/* Invoice Information */}
+                    {vente.invoice && (
+                      <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
+                              <span className="text-xs font-bold text-blue-600 dark:text-blue-400">📄</span>
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                Facture {vente.invoice.invoice_number}
+                              </p>
+                              <p className="text-xs text-slate-600 dark:text-slate-400">
+                                Générée automatiquement
+                              </p>
+                            </div>
+                          </div>
+                          <div className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                            vente.invoice.payment_status === 'paid'
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                              : vente.invoice.payment_status === 'unpaid'
+                              ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400'
+                              : 'bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-400'
+                          }`}>
+                            {vente.invoice.payment_status === 'paid' ? 'Payée' :
+                             vente.invoice.payment_status === 'unpaid' ? 'Non payée' :
+                             'Remboursée'}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex gap-2">
