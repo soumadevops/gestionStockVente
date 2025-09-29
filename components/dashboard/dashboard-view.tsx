@@ -1,8 +1,9 @@
 "use client"
 
-import React from "react"
+import React, { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Smartphone, ShoppingCart, DollarSign, Package, AlertTriangle, BarChart3 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Smartphone, ShoppingCart, DollarSign, Package, AlertTriangle, BarChart3, CheckCircle, Clock, RefreshCw, Filter } from "lucide-react"
 import type { Sale, Product, CompanySettings } from "@/lib/types"
 
 interface DashboardViewProps {
@@ -13,6 +14,8 @@ interface DashboardViewProps {
   ventes: Sale[]
   products: Product[]
   companySettings: CompanySettings
+  salesFilter?: string
+  onSalesFilterChange?: (filter: string) => void
 }
 
 export const DashboardView = React.memo(function DashboardView({
@@ -22,8 +25,57 @@ export const DashboardView = React.memo(function DashboardView({
   lowStockProducts,
   ventes,
   products,
-  companySettings
+  companySettings,
+  salesFilter = "all",
+  onSalesFilterChange
 }: DashboardViewProps) {
+  // Filter sales based on payment status
+  const filteredVentes = ventes.filter((vente) => {
+    if (salesFilter === "all") return true
+    if (salesFilter === "paid") return vente.invoice?.payment_status === "paid"
+    if (salesFilter === "unpaid") return vente.invoice?.payment_status === "unpaid"
+    if (salesFilter === "refunded") return vente.invoice?.payment_status === "refunded"
+    return true
+  })
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "paid":
+        return "bg-green-100 text-green-800 border-green-200"
+      case "unpaid":
+        return "bg-orange-100 text-orange-800 border-orange-200"
+      case "refunded":
+        return "bg-gray-100 text-gray-800 border-gray-200"
+      default:
+        return "bg-blue-100 text-blue-800 border-blue-200"
+    }
+  }
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "paid":
+        return <CheckCircle className="w-3 h-3" />
+      case "unpaid":
+        return <Clock className="w-3 h-3" />
+      case "refunded":
+        return <RefreshCw className="w-3 h-3" />
+      default:
+        return <BarChart3 className="w-3 h-3" />
+    }
+  }
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "paid":
+        return "Payée"
+      case "unpaid":
+        return "Non payée"
+      case "refunded":
+        return "Remboursée"
+      default:
+        return "Brouillon"
+    }
+  }
   return (
     <div className="space-y-8">
       <div className="relative overflow-hidden bg-gradient-to-r from-indigo-600/10 via-purple-600/5 to-pink-600/10 rounded-3xl p-8 border border-indigo-200/50 dark:border-indigo-800/50 shadow-lg backdrop-blur-sm">
@@ -100,46 +152,128 @@ export const DashboardView = React.memo(function DashboardView({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Sales */}
+        {/* Recent Sales with Invoice Details */}
         <Card className="bg-gradient-to-br from-white to-gray-50/50 border-gray-200/50 shadow-xl hover:shadow-2xl transition-all duration-300">
           <CardHeader className="pb-4">
-            <CardTitle className="text-gray-800 flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-md">
-                <BarChart3 className="w-5 h-5 text-white" />
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-gray-800 flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-md">
+                  <BarChart3 className="w-5 h-5 text-white" />
+                </div>
+                Ventes & Factures Récentes
+              </CardTitle>
+              {/* Filter Buttons */}
+              <div className="flex gap-2">
+                <Button
+                  variant={salesFilter === "all" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => onSalesFilterChange?.("all")}
+                  className={`text-xs px-3 py-1 h-8 ${
+                    salesFilter === "all"
+                      ? "bg-blue-600 hover:bg-blue-700"
+                      : "border-blue-200 text-blue-600 hover:bg-blue-50"
+                  }`}
+                >
+                  <Filter className="w-3 h-3 mr-1" />
+                  Toutes ({ventes.length})
+                </Button>
+                <Button
+                  variant={salesFilter === "paid" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => onSalesFilterChange?.("paid")}
+                  className={`text-xs px-3 py-1 h-8 ${
+                    salesFilter === "paid"
+                      ? "bg-green-600 hover:bg-green-700"
+                      : "border-green-200 text-green-600 hover:bg-green-50"
+                  }`}
+                >
+                  <CheckCircle className="w-3 h-3 mr-1" />
+                  Payées ({ventes.filter(v => v.invoice?.payment_status === "paid").length})
+                </Button>
+                <Button
+                  variant={salesFilter === "unpaid" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => onSalesFilterChange?.("unpaid")}
+                  className={`text-xs px-3 py-1 h-8 ${
+                    salesFilter === "unpaid"
+                      ? "bg-orange-600 hover:bg-orange-700"
+                      : "border-orange-200 text-orange-600 hover:bg-orange-50"
+                  }`}
+                >
+                  <Clock className="w-3 h-3 mr-1" />
+                  Non payées ({ventes.filter(v => v.invoice?.payment_status === "unpaid").length})
+                </Button>
               </div>
-              Ventes Récentes
-            </CardTitle>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {ventes.slice(0, 5).map((vente, index) => (
-                <div key={vente.id} className="flex items-center justify-between p-4 bg-gradient-to-r from-white to-blue-50/30 rounded-xl border border-blue-100/50 hover:shadow-md transition-all duration-200 hover:scale-[1.02]">
-                  <div className="flex items-center space-x-4">
-                    <div className="relative">
-                      <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-md">
-                        <Smartphone className="w-6 h-6 text-white" />
+            <div className="space-y-4">
+              {filteredVentes.slice(0, 8).map((vente, index) => (
+                <div key={vente.id} className="bg-white rounded-xl border border-gray-200/60 shadow-sm hover:shadow-lg transition-all duration-200 hover:scale-[1.01] overflow-hidden">
+                  {/* Header with Client and Status */}
+                  <div className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-blue-50/30 border-b border-gray-100">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-md">
+                        <Smartphone className="w-5 h-5 text-white" />
                       </div>
-                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
+                      <div>
+                        <p className="font-semibold text-gray-800 text-sm">{vente.nom_prenom_client}</p>
+                        <p className="text-xs text-gray-500">
+                          {new Date(vente.date_vente).toLocaleDateString("fr-FR")}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-semibold text-gray-800">{vente.nom_prenom_client}</p>
-                      <p className="text-sm text-gray-600">
-                        {vente.marque} {vente.modele}
-                      </p>
+                    <div className={`px-3 py-1 rounded-full text-xs font-medium border flex items-center gap-1 ${
+                      vente.invoice ? getStatusColor(vente.invoice.payment_status) : "bg-gray-100 text-gray-600 border-gray-200"
+                    }`}>
+                      {vente.invoice ? getStatusIcon(vente.invoice.payment_status) : <BarChart3 className="w-3 h-3" />}
+                      {vente.invoice ? getStatusText(vente.invoice.payment_status) : "Sans facture"}
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-bold text-blue-600 text-lg">{vente.prix.toLocaleString("fr-FR")} FCFA</p>
-                    <p className="text-xs text-gray-500">
-                      {vente.created_at ? new Date(vente.created_at).toLocaleDateString("fr-FR") : ""}
-                    </p>
+
+                  {/* Product Details */}
+                  <div className="p-4">
+                    <div className="grid grid-cols-2 gap-4 mb-3">
+                      <div>
+                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Produit</p>
+                        <p className="text-sm font-medium text-gray-800">{vente.nom_produit || `${vente.marque} ${vente.modele}`}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Détails</p>
+                        <p className="text-sm text-gray-600">{vente.marque} • {vente.modele} • {vente.imei_telephone}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="text-center">
+                          <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Quantité</p>
+                          <p className="text-sm font-semibold text-blue-600">1 unité</p>
+                        </div>
+                        {vente.invoice && (
+                          <div className="text-center">
+                            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">N° Facture</p>
+                            <p className="text-sm font-mono text-purple-600">{vente.invoice.invoice_number}</p>
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Montant</p>
+                        <p className="text-lg font-bold text-green-600">{vente.prix.toLocaleString("fr-FR")} FCFA</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))}
-              {ventes.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  <BarChart3 className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>Aucune vente récente</p>
+              {filteredVentes.length === 0 && (
+                <div className="text-center py-12 text-gray-500">
+                  <BarChart3 className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium">
+                    {salesFilter === "all" ? "Aucune vente récente" : `Aucune vente ${getStatusText(salesFilter).toLowerCase()}`}
+                  </p>
+                  <p className="text-sm text-gray-400 mt-1">
+                    {salesFilter === "all" ? "Les ventes apparaîtront ici" : "Essayez un autre filtre"}
+                  </p>
                 </div>
               )}
             </div>

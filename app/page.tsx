@@ -69,6 +69,7 @@ interface UserPreferences {
 }
 
 
+
 const PHONE_BRANDS = [
   "Apple",
   "Samsung",
@@ -157,7 +158,20 @@ export default function SalesManagementApp() {
     dataExport: true,
   })
   const [isEditingSettings, setIsEditingSettings] = useState(false)
-  const [tempSettings, setTempSettings] = useState<CompanySettings>(companySettings)
+  const [tempSettings, setTempSettings] = useState<CompanySettings>({
+    id: companySettings.id,
+    nom_compagnie: companySettings.nom_compagnie,
+    nom_admin: companySettings.nom_admin,
+    logo_url: companySettings.logo_url || "",
+    email: companySettings.email,
+    phone: companySettings.phone,
+    address: companySettings.address,
+    website: companySettings.website,
+    tax_id: companySettings.tax_id,
+    currency: companySettings.currency,
+    language: companySettings.language,
+    timezone: companySettings.timezone,
+  })
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
 
@@ -195,6 +209,7 @@ export default function SalesManagementApp() {
   // Invoice filters
   const [invoiceSearchTerm, setInvoiceSearchTerm] = useState("")
   const [invoiceStatusFilter, setInvoiceStatusFilter] = useState("")
+  const [salesFilter, setSalesFilter] = useState("all")
 
   const supabase = createClient()
 
@@ -270,82 +285,6 @@ export default function SalesManagementApp() {
     checkUser()
   }, [supabase.auth, router])
 
-  // Debug database schema and RLS policies
-  useEffect(() => {
-    const debugDatabase = async () => {
-      if (!user) return
-
-      try {
-        console.log("🔍 Debugging database schema and RLS policies...")
-
-        // Check if invoices table exists and has user_id column
-        const { data: invoiceColumns, error: invoiceError } = await supabase
-          .from("information_schema.columns")
-          .select("column_name")
-          .eq("table_name", "invoices")
-          .eq("table_schema", "public")
-
-        if (invoiceError) {
-          console.error("❌ Error checking invoices table:", invoiceError)
-        } else {
-          console.log("📋 Invoices table columns:", invoiceColumns?.map(col => col.column_name))
-          const hasUserId = invoiceColumns?.some(col => col.column_name === "user_id")
-          console.log("👤 Invoices table has user_id column:", hasUserId)
-        }
-
-        // Check if invoice_items table exists and has user_id column
-        const { data: itemColumns, error: itemError } = await supabase
-          .from("information_schema.columns")
-          .select("column_name")
-          .eq("table_name", "invoice_items")
-          .eq("table_schema", "public")
-
-        if (itemError) {
-          console.error("❌ Error checking invoice_items table:", itemError)
-        } else {
-          console.log("📋 Invoice_items table columns:", itemColumns?.map(col => col.column_name))
-          const hasUserId = itemColumns?.some(col => col.column_name === "user_id")
-          console.log("👤 Invoice_items table has user_id column:", hasUserId)
-        }
-
-        // Test RLS policies by trying to insert a test invoice
-        console.log("🧪 Testing RLS policies...")
-        const testInvoiceData = {
-          invoice_number: "TEST-" + Date.now(),
-          client_name: "Test Client",
-          subtotal: 100,
-          tax_rate: 18,
-          tax_amount: 18,
-          total_amount: 118,
-          user_id: user.id,
-        }
-
-        const { data: testResult, error: testError } = await supabase
-          .from("invoices")
-          .insert([testInvoiceData])
-          .select()
-
-        if (testError) {
-          console.error("❌ RLS Policy Test Failed:", testError)
-          console.log("🔧 This indicates the RLS policy is blocking insertions")
-          console.log("📋 Solution: Run the updated SQL script in Supabase dashboard")
-        } else {
-          console.log("✅ RLS Policy Test Passed:", testResult)
-          // Clean up test data
-          if (testResult && testResult[0]) {
-            await supabase.from("invoices").delete().eq("id", testResult[0].id)
-          }
-        }
-
-      } catch (err) {
-        console.error("❌ Database debug error:", err)
-      }
-    }
-
-    if (user) {
-      debugDatabase()
-    }
-  }, [user])
 
   useEffect(() => {
     const loadAllData = async () => {
@@ -360,10 +299,13 @@ export default function SalesManagementApp() {
         }
 
         const [salesResponse, productsResponse, invoicesResponse, settingsResponse] = await Promise.all([
-          supabase.from("sales").select("*, invoices(invoice_number, status, payment_status)").eq("user_id", user.id).order("created_at", { ascending: false }),
+          supabase.from("sales").select(`
+            *,
+            invoice:invoices!sales_invoice_id_fkey(invoice_number, status, payment_status)
+          `).eq("user_id", user.id).order("created_at", { ascending: false }),
           supabase.from("products").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
           supabase.from("invoices").select("*, invoice_items (*)").eq("user_id", user.id).order("created_at", { ascending: false }),
-          supabase.from("company_settings").select("*").eq("user_id", user.id).limit(1).single(),
+          supabase.from("company_settings").select("*").limit(1).single(),
         ])
 
         if (salesResponse.error) {
@@ -404,8 +346,7 @@ export default function SalesManagementApp() {
           setLogoPreview(settingsResponse.data.logo_url || null)
         }
       } catch (err) {
-        console.error("[v0] Error loading data:", err)
-        // Error handling removed - app continues with empty data
+        // Error handling removed as requested
       } finally {
         setLoading(false)
       }
@@ -521,7 +462,7 @@ export default function SalesManagementApp() {
       const isEditing = !!editingInvoiceId
 
       if (isEditing) {
-        // Update existing invoice
+        // Update existing invoice and linked sale
         const invoiceData = {
           client_name: invoiceFormData.client_name.trim(),
           client_email: invoiceFormData.client_email?.trim() || null,
@@ -543,6 +484,34 @@ export default function SalesManagementApp() {
 
         if (invoiceError) {
           throw new Error(`Erreur lors de la modification de la facture: ${invoiceError.message}`)
+        }
+
+        // Update linked sale if it exists
+        const { data: existingSale } = await supabase
+          .from("sales")
+          .select("id")
+          .eq("invoice_id", editingInvoiceId)
+          .eq("user_id", user.id)
+          .single()
+
+        if (existingSale) {
+          // Update the linked sale with invoice data
+          const saleUpdateData = {
+            nom_prenom_client: invoiceFormData.client_name.trim(),
+            numero_telephone: invoiceFormData.client_phone?.trim() || "",
+            prix: Math.round(total_amount * 100) / 100, // Update sale price to match invoice total
+          }
+
+          const { error: saleError } = await supabase
+            .from("sales")
+            .update(saleUpdateData)
+            .eq("id", existingSale.id)
+            .eq("user_id", user.id)
+
+          if (saleError) {
+            console.error("Error updating linked sale:", saleError)
+            // Don't throw error, just log it - invoice update was successful
+          }
         }
 
         // Delete existing items and their units
@@ -773,8 +742,51 @@ export default function SalesManagementApp() {
           }
         )
 
-        // Deduct quantities from inventory immediately upon invoice creation
+        // Create corresponding sale record for the invoice
         const validItems = invoiceItems.filter(item => item.product_name.trim())
+        const saleData = {
+          nom_prenom_client: invoiceFormData.client_name.trim(),
+          numero_telephone: invoiceFormData.client_phone?.trim() || "",
+          date_vente: new Date().toISOString().split('T')[0], // Today's date
+          nom_produit: validItems.length > 0 ? validItems[0].product_name : "Multiple Products",
+          modele: validItems.length > 0 ? validItems[0].modele || "" : "",
+          marque: validItems.length > 0 ? validItems[0].marque || "" : "",
+          imei_telephone: validItems.length > 0 ? validItems[0].imei || "" : "",
+          prix: Math.round(total_amount * 100) / 100,
+          user_id: user.id,
+        }
+
+        const { data: createdSale, error: saleError } = await supabase
+          .from("sales")
+          .insert([saleData])
+          .select()
+          .single()
+
+        if (saleError) {
+          console.error("Error creating corresponding sale:", saleError)
+          // Don't throw error, invoice was created successfully
+          toast({
+            title: "Avertissement",
+            description: "La facture a été créée mais la vente associée n'a pas pu être enregistrée",
+            variant: "default",
+          })
+        } else if (createdSale) {
+          // Update invoice with sales_id
+          await supabase
+            .from("invoices")
+            .update({ sales_id: createdSale.id })
+            .eq("id", insertedInvoice.id)
+            .eq("user_id", user.id)
+
+          // Update sale with invoice_id
+          await supabase
+            .from("sales")
+            .update({ invoice_id: insertedInvoice.id })
+            .eq("id", createdSale.id)
+            .eq("user_id", user.id)
+        }
+
+        // Deduct quantities from inventory immediately upon invoice creation
         await deductFromInventory(validItems, user.id)
 
         setSuccessModal({
@@ -845,6 +857,35 @@ export default function SalesManagementApp() {
       })
     } catch (error) {
       console.error("Error deleting invoice:", error)
+      toast({
+        title: "Erreur",
+        description: `Erreur lors de la suppression: ${error instanceof Error ? error.message : "Erreur inconnue"}`,
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleBulkDeleteInvoices = async (ids: string[]) => {
+    if (!user) return
+
+    try {
+      // Delete all selected invoices
+      const { error } = await supabase
+        .from("invoices")
+        .delete()
+        .in("id", ids)
+        .eq("user_id", user.id)
+
+      if (error) throw error
+
+      setInvoices(invoices.filter((invoice) => !ids.includes(invoice.id)))
+      setSuccessModal({
+        isOpen: true,
+        message: `${ids.length} facture(s) supprimée(s) avec succès!`,
+        subMessage: "Les factures ont été définitivement supprimées du système.",
+      })
+    } catch (error) {
+      console.error("Error bulk deleting invoices:", error)
       toast({
         title: "Erreur",
         description: `Erreur lors de la suppression: ${error instanceof Error ? error.message : "Erreur inconnue"}`,
@@ -965,6 +1006,8 @@ export default function SalesManagementApp() {
 
   const deductFromInventory = useCallback(async (invoiceItems: any[], userId: string) => {
     try {
+      let hasUpdates = false
+
       // Group items by product details to find matching products
       for (const item of invoiceItems) {
         if (item.product_name && item.quantity > 0) {
@@ -1007,6 +1050,16 @@ export default function SalesManagementApp() {
               })
             } else {
               console.log(`Deducted ${item.quantity} from ${productToUpdate.nom_produit} stock. New stock: ${newStockQuantity}`)
+              hasUpdates = true
+
+              // Update local state immediately for real-time sync
+              setProducts(prevProducts =>
+                prevProducts.map(product =>
+                  product.id === productToUpdate.id
+                    ? { ...product, quantite_stock: newStockQuantity, updated_at: new Date().toISOString() }
+                    : product
+                )
+              )
             }
           } else {
             console.warn(`No matching product found for ${item.product_name} with sufficient stock`)
@@ -1019,15 +1072,20 @@ export default function SalesManagementApp() {
         }
       }
 
-      // Refresh products data
-      const { data: updatedProducts, error: refreshError } = await supabase
-        .from("products")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
+      // Only refresh from database if we had updates and want to ensure consistency
+      if (hasUpdates) {
+        // Small delay to ensure database consistency
+        setTimeout(async () => {
+          const { data: updatedProducts, error: refreshError } = await supabase
+            .from("products")
+            .select("*")
+            .eq("user_id", userId)
+            .order("created_at", { ascending: false })
 
-      if (!refreshError && updatedProducts) {
-        setProducts(updatedProducts)
+          if (!refreshError && updatedProducts) {
+            setProducts(updatedProducts)
+          }
+        }, 500)
       }
     } catch (error) {
       console.error("Error in deductFromInventory:", error)
@@ -2145,7 +2203,6 @@ export default function SalesManagementApp() {
       }
 
       await supabase.from("company_settings").upsert({
-        user_id: user.id,
         nom_compagnie: tempSettings.nom_compagnie.trim(),
         nom_admin: tempSettings.nom_admin.trim(),
         logo_url: logoUrl,
@@ -2159,7 +2216,21 @@ export default function SalesManagementApp() {
         timezone: tempSettings.timezone,
       })
 
-      setCompanySettings({ ...tempSettings, logo_url: logoUrl })
+      const dbSettings: CompanySettings = {
+        id: companySettings.id,
+        nom_compagnie: tempSettings.nom_compagnie.trim(),
+        nom_admin: tempSettings.nom_admin.trim(),
+        logo_url: logoUrl,
+        email: tempSettings.email?.trim() || "",
+        phone: tempSettings.phone?.trim() || "",
+        address: tempSettings.address?.trim() || "",
+        website: tempSettings.website?.trim() || "",
+        tax_id: tempSettings.tax_id?.trim() || "",
+        currency: tempSettings.currency,
+        language: tempSettings.language,
+        timezone: tempSettings.timezone,
+      }
+      setCompanySettings(dbSettings)
       setIsEditingSettings(false)
       setLogoFile(null)
 
@@ -2350,14 +2421,15 @@ export default function SalesManagementApp() {
           // Create invoice item
           const invoiceItemData = {
             invoice_id: invoiceResult[0].id,
-            product_name: `${saleFormData.marque} ${saleFormData.modele}`,
+            product_name: selectedProduct.nom_produit,
             imei: saleFormData.imei_telephone,
             quantity: 1,
             unit_price: Number.parseInt(saleFormData.prix),
             total_price: Number.parseInt(saleFormData.prix),
             marque: saleFormData.marque,
             modele: saleFormData.modele,
-            provenance: null,
+            provenance: selectedProduct.provenance || null,
+            user_id: user.id,
           }
 
           const { error: itemError } = await supabase
@@ -2481,6 +2553,52 @@ export default function SalesManagementApp() {
       })
     } catch (error) {
       console.error("Error deleting sale:", error)
+      toast({
+        title: "Erreur",
+        description: `Erreur lors de la suppression: ${error instanceof Error ? error.message : "Erreur inconnue"}`,
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleBulkDeleteSales = async (ids: string[]) => {
+    if (!user) return
+
+    try {
+      // First delete associated invoices for all selected sales
+      for (const id of ids) {
+        const saleToDelete = ventes.find(v => v.id === id)
+        if (saleToDelete?.invoice) {
+          const { error: invoiceError } = await supabase
+            .from("invoices")
+            .delete()
+            .eq("sales_id", id)
+            .eq("user_id", user.id)
+
+          if (invoiceError) {
+            console.error("Error deleting associated invoice:", invoiceError)
+            // Continue with other deletions
+          }
+        }
+      }
+
+      // Then delete all selected sales
+      const { error } = await supabase
+        .from("sales")
+        .delete()
+        .in("id", ids)
+        .eq("user_id", user.id)
+
+      if (error) throw error
+
+      setVentes(ventes.filter((vente) => !ids.includes(vente.id)))
+      setSuccessModal({
+        isOpen: true,
+        message: `${ids.length} vente(s) supprimée(s) avec succès!`,
+        subMessage: "Les ventes et leurs factures associées ont été supprimées du système.",
+      })
+    } catch (error) {
+      console.error("Error bulk deleting sales:", error)
       toast({
         title: "Erreur",
         description: `Erreur lors de la suppression: ${error instanceof Error ? error.message : "Erreur inconnue"}`,
@@ -3349,6 +3467,8 @@ export default function SalesManagementApp() {
               ventes={ventes}
               products={products}
               companySettings={companySettings}
+              salesFilter={salesFilter}
+              onSalesFilterChange={setSalesFilter}
             />
           </div>
         ) : activeTab === "ventes" ? (
@@ -3358,16 +3478,8 @@ export default function SalesManagementApp() {
               filteredVentes={filteredVentes}
               searchTerm={searchTerm}
               setSearchTerm={setSearchTerm}
-              showAddForm={showAddSaleForm}
-              setShowAddForm={setShowAddSaleForm}
-              editingId={editingId}
-              formData={saleFormData}
-              setFormData={setSaleFormData}
-              handleAddVente={handleAddSale}
-              handleEditVente={handleEditVente}
-              handleSaveEdit={handleSaveEdit}
-              handleCancelEdit={handleCancelEdit}
               handleDeleteSale={handleDeleteSale}
+              handleBulkDeleteSales={handleBulkDeleteSales}
               products={products}
             />
           </div>
@@ -3400,6 +3512,7 @@ export default function SalesManagementApp() {
               resetInvoiceForm={resetInvoiceForm}
               printInvoice={previewInvoice}
               handleDeleteInvoice={handleDeleteInvoice}
+              handleBulkDeleteInvoices={handleBulkDeleteInvoices}
               isSubmitting={isSubmittingInvoice}
               products={products}
               onProductSelect={handleProductSelect}
@@ -3412,11 +3525,48 @@ export default function SalesManagementApp() {
         ) : (
           <div role="tabpanel" id="settings-panel" aria-labelledby="settings-tab">
             <SettingsView
-              companySettings={companySettings}
+              companySettings={{
+                companyName: companySettings.nom_compagnie,
+                adminName: companySettings.nom_admin,
+                logoUrl: companySettings.logo_url || "",
+                email: companySettings.email,
+                phone: companySettings.phone,
+                address: companySettings.address,
+                website: companySettings.website,
+                taxId: companySettings.tax_id,
+                currency: companySettings.currency,
+                language: companySettings.language,
+                timezone: companySettings.timezone,
+              }}
               isEditingSettings={isEditingSettings}
               setIsEditingSettings={setIsEditingSettings}
-              tempSettings={tempSettings}
-              setTempSettings={setTempSettings}
+              tempSettings={{
+                companyName: tempSettings.nom_compagnie,
+                adminName: tempSettings.nom_admin,
+                logoUrl: tempSettings.logo_url || "",
+                email: tempSettings.email,
+                phone: tempSettings.phone,
+                address: tempSettings.address,
+                website: tempSettings.website,
+                taxId: tempSettings.tax_id,
+                currency: tempSettings.currency,
+                language: tempSettings.language,
+                timezone: tempSettings.timezone,
+              }}
+              setTempSettings={(settings) => setTempSettings({
+                id: tempSettings.id,
+                nom_compagnie: settings.companyName,
+                nom_admin: settings.adminName,
+                logo_url: settings.logoUrl || "",
+                email: settings.email,
+                phone: settings.phone,
+                address: settings.address,
+                website: settings.website,
+                tax_id: settings.taxId,
+                currency: settings.currency,
+                language: settings.language,
+                timezone: settings.timezone,
+              })}
               logoPreview={logoPreview}
               handleLogoUpload={handleLogoUpload}
               handleSaveSettings={handleSaveSettings}

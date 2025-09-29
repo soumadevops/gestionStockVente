@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, Trash2, Printer, FileText, Eye, Save, Copy, Calculator, AlertTriangle, CheckCircle, Clock, Users, Package, DollarSign, Calendar, FileCheck, Search, Edit } from "lucide-react"
 
@@ -57,58 +58,86 @@ interface Product {
  }
 
 interface InvoicesViewProps {
-     invoices: Invoice[]
-     showAddInvoiceForm: boolean
-     setShowAddInvoiceForm: (show: boolean) => void
-     editingInvoiceId: string | null
-     onEditInvoice: (invoiceId: string) => void
-     invoiceFormData: any
-     handleInvoiceFormChange: (field: string, value: string) => void
-     invoiceItems: InvoiceItemForm[]
-     handleInvoiceItemChange: (index: number, field: string, value: any) => void
-     handleInvoiceItemUnitChange?: (itemIndex: number, unitIndex: number, field: string, value: string) => void
-     addInvoiceItem: () => void
-     removeInvoiceItem: (index: number) => void
-     handleAddInvoice: () => Promise<void>
-     resetInvoiceForm: () => void
-     printInvoice: (invoice: Invoice) => void
-     handleDeleteInvoice: (id: string) => Promise<void>
-     isSubmitting?: boolean
-     products?: Product[]
-     onProductSelect?: (index: number, product: Product) => void
-     invoiceSearchTerm: string
-     setInvoiceSearchTerm: (term: string) => void
-     invoiceStatusFilter: string
-     setInvoiceStatusFilter: (status: string) => void
-   }
+      invoices: Invoice[]
+      showAddInvoiceForm: boolean
+      setShowAddInvoiceForm: (show: boolean) => void
+      editingInvoiceId: string | null
+      onEditInvoice: (invoiceId: string) => void
+      invoiceFormData: any
+      handleInvoiceFormChange: (field: string, value: string) => void
+      invoiceItems: InvoiceItemForm[]
+      handleInvoiceItemChange: (index: number, field: string, value: any) => void
+      handleInvoiceItemUnitChange?: (itemIndex: number, unitIndex: number, field: string, value: string) => void
+      addInvoiceItem: () => void
+      removeInvoiceItem: (index: number) => void
+      handleAddInvoice: () => Promise<void>
+      resetInvoiceForm: () => void
+      printInvoice: (invoice: Invoice) => void
+      handleDeleteInvoice: (id: string) => Promise<void>
+      handleBulkDeleteInvoices?: (ids: string[]) => Promise<void>
+      isSubmitting?: boolean
+      products?: Product[]
+      onProductSelect?: (index: number, product: Product) => void
+      invoiceSearchTerm: string
+      setInvoiceSearchTerm: (term: string) => void
+      invoiceStatusFilter: string
+      setInvoiceStatusFilter: (status: string) => void
+    }
 
 export const InvoicesView = function InvoicesView({
-    invoices,
-    showAddInvoiceForm,
-    setShowAddInvoiceForm,
-    editingInvoiceId,
-    onEditInvoice,
-    invoiceFormData,
-    handleInvoiceFormChange,
-    invoiceItems,
-    handleInvoiceItemChange,
-    handleInvoiceItemUnitChange,
-    addInvoiceItem,
-    removeInvoiceItem,
-    handleAddInvoice,
-    resetInvoiceForm,
-    printInvoice,
-    handleDeleteInvoice,
-    isSubmitting = false,
-    products = [],
-    onProductSelect,
-    invoiceSearchTerm,
-    setInvoiceSearchTerm,
-    invoiceStatusFilter,
-    setInvoiceStatusFilter
-  }: InvoicesViewProps) {
-  // Auto-save functionality
-  const autoSaveKey = `invoice_draft_${editingInvoiceId || 'new'}`
+     invoices,
+     showAddInvoiceForm,
+     setShowAddInvoiceForm,
+     editingInvoiceId,
+     onEditInvoice,
+     invoiceFormData,
+     handleInvoiceFormChange,
+     invoiceItems,
+     handleInvoiceItemChange,
+     handleInvoiceItemUnitChange,
+     addInvoiceItem,
+     removeInvoiceItem,
+     handleAddInvoice,
+     resetInvoiceForm,
+     printInvoice,
+     handleDeleteInvoice,
+     handleBulkDeleteInvoices,
+     isSubmitting = false,
+     products = [],
+     onProductSelect,
+     invoiceSearchTerm,
+     setInvoiceSearchTerm,
+     invoiceStatusFilter,
+     setInvoiceStatusFilter
+   }: InvoicesViewProps) {
+   // State for bulk selection
+   const [selectedInvoices, setSelectedInvoices] = React.useState<string[]>([])
+
+   const handleSelectInvoice = (invoiceId: string, checked: boolean) => {
+     if (checked) {
+       setSelectedInvoices(prev => [...prev, invoiceId])
+     } else {
+       setSelectedInvoices(prev => prev.filter(id => id !== invoiceId))
+     }
+   }
+
+   const handleSelectAllInvoices = (checked: boolean) => {
+     if (checked) {
+       setSelectedInvoices(invoices.map(invoice => invoice.id))
+     } else {
+       setSelectedInvoices([])
+     }
+   }
+
+   const handleBulkDelete = async () => {
+     if (handleBulkDeleteInvoices && selectedInvoices.length > 0) {
+       await handleBulkDeleteInvoices(selectedInvoices)
+       setSelectedInvoices([])
+     }
+   }
+
+   // Auto-save functionality
+   const autoSaveKey = `invoice_draft_${editingInvoiceId || 'new'}`
 
   const saveDraft = useCallback(() => {
     if (showAddInvoiceForm && (invoiceFormData.client_name || invoiceItems.length > 0)) {
@@ -222,6 +251,36 @@ export const InvoicesView = function InvoicesView({
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 lg:flex-shrink-0">
+            {selectedInvoices.length > 0 && handleBulkDeleteInvoices && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="destructive"
+                    className="bg-red-600 hover:bg-red-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 px-6 py-4 rounded-xl font-semibold text-lg"
+                  >
+                    <Trash2 className="w-5 h-5 mr-2" />
+                    Supprimer ({selectedInvoices.length})
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Êtes-vous sûr de vouloir supprimer {selectedInvoices.length} facture(s) sélectionnée(s) ?
+                      Cette action est irréversible et supprimera également les articles associés.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Annuler</AlertDialogCancel>
+                    <AlertDialogAction asChild>
+                      <Button onClick={handleBulkDelete} variant="destructive">
+                        Supprimer
+                      </Button>
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
             <Button
               onClick={() => setShowAddInvoiceForm(true)}
               className="bg-white text-indigo-600 hover:bg-blue-50 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 px-8 py-4 rounded-xl font-semibold text-lg"
@@ -464,10 +523,10 @@ export const InvoicesView = function InvoicesView({
                               </div>
                               <div className="md:col-span-2">
                                 <Label className="text-xs text-muted-foreground mb-1 block">
-                                  Modèle
+                                  Couleur
                                 </Label>
                                 <Input
-                                  placeholder="Modèle"
+                                  placeholder="Couleur"
                                   value={item.modele || ""}
                                   onChange={(e) => handleInvoiceItemChange(index, "modele", e.target.value)}
                                   className="bg-background border-border text-foreground text-sm"
@@ -852,6 +911,19 @@ export const InvoicesView = function InvoicesView({
 
             {/* Filter and Search Bar */}
             <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+              {/* Select All Checkbox */}
+              {handleBulkDeleteInvoices && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg">
+                  <Checkbox
+                    checked={selectedInvoices.length === invoices.length && invoices.length > 0}
+                    onCheckedChange={handleSelectAllInvoices}
+                    className="border-blue-400 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                  />
+                  <span className="text-sm font-medium">
+                    Tout sélectionner ({selectedInvoices.length}/{invoices.length})
+                  </span>
+                </div>
+              )}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <input
@@ -892,9 +964,19 @@ export const InvoicesView = function InvoicesView({
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {invoices.map((invoice, index) => (
-                  <tr key={invoice.id} className="hover:bg-indigo-50/50 transition-all duration-200 cursor-pointer group" onClick={() => onEditInvoice(invoice.id)}>
+                  <tr key={invoice.id} className={`hover:bg-indigo-50/50 transition-all duration-200 cursor-pointer group ${selectedInvoices.includes(invoice.id) ? 'bg-blue-50' : ''}`} onClick={() => onEditInvoice(invoice.id)}>
                     <td className="px-6 py-4">
                       <div className="flex items-center">
+                        {handleBulkDeleteInvoices && (
+                          <Checkbox
+                            checked={selectedInvoices.includes(invoice.id)}
+                            onCheckedChange={(checked) => {
+                              handleSelectInvoice(invoice.id, checked as boolean)
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="mr-3 border-slate-400 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                          />
+                        )}
                         <div className="flex-shrink-0 w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
                           <FileText className="w-5 h-5 text-indigo-600" />
                         </div>
@@ -987,13 +1069,25 @@ export const InvoicesView = function InvoicesView({
           {/* Mobile Card Layout */}
           <div className="md:hidden space-y-2">
             {invoices.map((invoice, index) => (
-              <div key={invoice.id} className={`border border-gray-300 rounded-lg shadow-sm ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors cursor-pointer`} onClick={() => onEditInvoice(invoice.id)}>
-                <div className="p-4">
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <h3 className="font-semibold text-gray-900 text-lg">{invoice.invoice_number}</h3>
-                      <p className="text-sm text-gray-600 font-medium">{invoice.client_name}</p>
-                    </div>
+               <div key={invoice.id} className={`border border-gray-300 rounded-lg shadow-sm ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors cursor-pointer ${selectedInvoices.includes(invoice.id) ? 'bg-blue-50 border-blue-300' : ''}`} onClick={() => onEditInvoice(invoice.id)}>
+                 <div className="p-4">
+                   <div className="flex justify-between items-start mb-3">
+                     <div className="flex items-center gap-3">
+                       {handleBulkDeleteInvoices && (
+                         <Checkbox
+                           checked={selectedInvoices.includes(invoice.id)}
+                           onCheckedChange={(checked) => {
+                             handleSelectInvoice(invoice.id, checked as boolean)
+                           }}
+                           onClick={(e) => e.stopPropagation()}
+                           className="border-slate-400 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                         />
+                       )}
+                       <div>
+                         <h3 className="font-semibold text-gray-900 text-lg">{invoice.invoice_number}</h3>
+                         <p className="text-sm text-gray-600 font-medium">{invoice.client_name}</p>
+                       </div>
+                     </div>
                     <span
                       className={`px-3 py-1 rounded-full text-xs font-medium border ${
                         invoice.payment_status === "paid"
