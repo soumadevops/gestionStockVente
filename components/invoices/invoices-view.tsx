@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Trash2, Printer, FileText, Eye, Save, Copy, Calculator, AlertTriangle, CheckCircle, Clock, Users, Package, DollarSign, Calendar, FileCheck, Search, Edit } from "lucide-react"
+import { Plus, Trash2, Printer, FileText, Eye, Save, Copy, Calculator, AlertTriangle, CheckCircle, Clock, Users, Package, DollarSign, Calendar, FileCheck, Search, Edit, ArrowLeft } from "lucide-react"
 
 interface Invoice {
   id: string
@@ -307,6 +307,19 @@ export const InvoicesView = function InvoicesView({
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setShowAddInvoiceForm(false)
+                        resetInvoiceForm()
+                      }}
+                      className="mr-2 px-3 py-2 border-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 dark:border-green-500"
+                      title="Retour à la liste des factures"
+                    >
+                      <ArrowLeft className="w-4 h-4 text-green-700 dark:text-green-400 mr-1" />
+                      Retour
+                    </Button>
                     <CardTitle className="text-foreground flex items-center gap-2">
                       <FileText className="w-5 h-5" />
                       {editingInvoiceId ? "Modifier la Facture" : "Créer une Nouvelle Facture"}
@@ -1025,39 +1038,63 @@ export const InvoicesView = function InvoicesView({
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm text-gray-600 font-medium">
-                        <span
-                          className="text-blue-600 hover:text-blue-800 cursor-pointer hover:underline"
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={(e) => {
                             e.stopPropagation();
                             onEditInvoice(invoice.id);
                           }}
+                          className="h-8 w-8 p-0 text-blue-600 hover:text-blue-800 hover:bg-blue-50 transition-colors"
+                          title="Modifier la facture"
                         >
-                          modifier
-                        </span>
-                        <span className="mx-1 text-gray-400">|</span>
-                        <span
-                          className="text-red-600 hover:text-red-800 cursor-pointer hover:underline"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            // Handle delete with confirmation
-                            if (window.confirm(`Êtes-vous sûr de vouloir supprimer la facture ${invoice.invoice_number} ?`)) {
-                              handleDeleteInvoice(invoice.id);
-                            }
-                          }}
-                        >
-                          supprimer
-                        </span>
-                        <span className="mx-1 text-gray-400">|</span>
-                        <span
-                          className="text-indigo-600 hover:text-indigo-800 cursor-pointer hover:underline"
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-red-600 hover:text-red-800 hover:bg-red-50 transition-colors"
+                              title="Supprimer la facture"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Êtes-vous sûr de vouloir supprimer la facture {invoice.invoice_number} ?
+                                Cette action est irréversible et supprimera également les articles associés.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Annuler</AlertDialogCancel>
+                              <AlertDialogAction asChild>
+                                <Button
+                                  onClick={() => handleDeleteInvoice(invoice.id)}
+                                  variant="destructive"
+                                >
+                                  Supprimer
+                                </Button>
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={(e) => {
                             e.stopPropagation();
                             printInvoice(invoice);
                           }}
+                          className="h-8 w-8 p-0 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 transition-colors"
+                          title="Imprimer la facture"
                         >
-                          imprimer
-                        </span>
+                          <Printer className="w-4 h-4" />
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -1117,38 +1154,63 @@ export const InvoicesView = function InvoicesView({
                   </div>
 
                   <div className="border-t border-gray-200 pt-3">
-                    <div className="text-sm text-gray-600 font-medium">
-                      <span
-                        className="text-blue-600 hover:text-blue-800 cursor-pointer hover:underline"
+                    <div className="flex items-center justify-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
                           onEditInvoice(invoice.id);
                         }}
+                        className="h-8 w-8 p-0 text-blue-600 hover:text-blue-800 hover:bg-blue-50 transition-colors"
+                        title="Modifier la facture"
                       >
-                        modifier
-                      </span>
-                      <span className="mx-1 text-gray-400">|</span>
-                      <span
-                        className="text-red-600 hover:text-red-800 cursor-pointer hover:underline"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (window.confirm(`Êtes-vous sûr de vouloir supprimer la facture ${invoice.invoice_number} ?`)) {
-                            handleDeleteInvoice(invoice.id);
-                          }
-                        }}
-                      >
-                        supprimer
-                      </span>
-                      <span className="mx-1 text-gray-400">|</span>
-                      <span
-                        className="text-indigo-600 hover:text-indigo-800 cursor-pointer hover:underline"
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-800 hover:bg-red-50 transition-colors"
+                            title="Supprimer la facture"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Êtes-vous sûr de vouloir supprimer la facture {invoice.invoice_number} ?
+                              Cette action est irréversible et supprimera également les articles associés.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Annuler</AlertDialogCancel>
+                            <AlertDialogAction asChild>
+                              <Button
+                                onClick={() => handleDeleteInvoice(invoice.id)}
+                                variant="destructive"
+                              >
+                                Supprimer
+                              </Button>
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
                           printInvoice(invoice);
                         }}
+                        className="h-8 w-8 p-0 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 transition-colors"
+                        title="Imprimer la facture"
                       >
-                        imprimer
-                      </span>
+                        <Printer className="w-4 h-4" />
+                      </Button>
                     </div>
                   </div>
                 </div>

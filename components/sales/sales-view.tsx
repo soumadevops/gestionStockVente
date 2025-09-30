@@ -8,7 +8,9 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Search, Plus, Save, X, Edit, Trash2, Smartphone, Phone, Calendar, Package, ShoppingCart, Calculator, CheckCircle, Eye, Printer, Clock, RefreshCw } from "lucide-react"
+import { Search, Plus, Save, X, Edit, Trash2, Smartphone, Phone, Calendar, Package, ShoppingCart, Calculator, CheckCircle, Eye, Printer, Clock, RefreshCw, DollarSign } from "lucide-react"
+import { SalesDetailModal } from "./sales-detail-modal"
+import { printSale } from "@/lib/utils/printSale"
 
 interface Sale {
   id: string
@@ -76,6 +78,8 @@ export const SalesView = function SalesView({
   // Component for displaying and managing sales with filtering and bulk operations
 
   const [selectedSales, setSelectedSales] = React.useState<string[]>([])
+  const [selectedSale, setSelectedSale] = React.useState<Sale | null>(null)
+  const [isDetailModalOpen, setIsDetailModalOpen] = React.useState(false)
 
   const handleSelectSale = (saleId: string, checked: boolean) => {
     if (checked) {
@@ -118,22 +122,43 @@ export const SalesView = function SalesView({
             </div>
 
             {/* Quick Stats */}
-            <div className="flex flex-wrap gap-6 mt-6">
-              <div className="bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-emerald-200/50 shadow-sm">
-                <div className="text-2xl font-bold text-emerald-800">{ventes.length}</div>
-                <div className="text-emerald-600 text-sm">Total Ventes</div>
-              </div>
-              <div className="bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-emerald-200/50 shadow-sm">
-                <div className="text-2xl font-bold text-emerald-800">
-                  {ventes.reduce((sum, vente) => sum + vente.prix, 0).toLocaleString("fr-FR")}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
+              <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-xl p-4 border border-emerald-200/50 dark:border-emerald-800/50 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/40 rounded-lg flex items-center justify-center">
+                    <ShoppingCart className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div>
+                    <div className="text-xl font-bold text-emerald-800 dark:text-emerald-200">{ventes.length}</div>
+                    <div className="text-emerald-600 dark:text-emerald-400 text-sm font-medium">Total Ventes</div>
+                  </div>
                 </div>
-                <div className="text-emerald-600 text-sm">Chiffre d'Affaires</div>
               </div>
-              <div className="bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-emerald-200/50 shadow-sm">
-                <div className="text-2xl font-bold text-emerald-800">
-                  {ventes.filter(v => v.invoice?.payment_status === 'paid').length}
+              <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-xl p-4 border border-blue-200/50 dark:border-blue-800/50 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/40 rounded-lg flex items-center justify-center">
+                    <DollarSign className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <div className="text-xl font-bold text-blue-800 dark:text-blue-200">
+                      {ventes.reduce((sum, vente) => sum + vente.prix, 0).toLocaleString("fr-FR")}
+                    </div>
+                    <div className="text-blue-600 dark:text-blue-400 text-sm font-medium">Chiffre d'Affaires</div>
+                  </div>
                 </div>
-                <div className="text-emerald-600 text-sm">Ventes Payées</div>
+              </div>
+              <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-xl p-4 border border-green-200/50 dark:border-green-800/50 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-green-100 dark:bg-green-900/40 rounded-lg flex items-center justify-center">
+                    <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  </div>
+                  <div>
+                    <div className="text-xl font-bold text-green-800 dark:text-green-200">
+                      {ventes.filter(v => v.invoice?.payment_status === 'paid').length}
+                    </div>
+                    <div className="text-green-600 dark:text-green-400 text-sm font-medium">Ventes Payées</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -292,8 +317,8 @@ export const SalesView = function SalesView({
       {/* Sales List */}
       <div className="grid gap-4">
         {filteredVentes.map((vente) => (
-           <Card key={vente.id} className={`bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700/60 shadow-sm hover:shadow-xl hover:shadow-slate-200/20 dark:hover:shadow-slate-900/20 transition-all duration-300 hover:scale-[1.02] hover:border-slate-300 dark:hover:border-slate-600 group ${selectedSales.includes(vente.id) ? 'ring-2 ring-blue-500 border-blue-500' : ''}`}>
-             <CardContent className="p-6">
+           <Card key={vente.id} className={`bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700/60 shadow-sm hover:shadow-lg hover:shadow-slate-200/20 dark:hover:shadow-slate-900/20 transition-all duration-200 hover:scale-[1.01] hover:border-slate-300 dark:hover:border-slate-600 group ${selectedSales.includes(vente.id) ? 'ring-2 ring-blue-500 border-blue-500 shadow-md' : ''}`}>
+             <CardContent className="p-5">
                <div className="flex items-start justify-between gap-6">
                  {/* Checkbox for selection */}
                  {handleBulkDeleteSales && (
@@ -322,15 +347,17 @@ export const SalesView = function SalesView({
                         </div>
                       </div>
                       <div className="text-right ml-4">
-                        <p className="text-2xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
-                          {vente.prix.toLocaleString("fr-FR")}
-                        </p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">FCFA</p>
+                        <div className="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-lg px-3 py-2 text-white">
+                          <p className="text-xl font-bold">
+                            {vente.prix.toLocaleString("fr-FR")}
+                          </p>
+                          <p className="text-xs opacity-90">FCFA</p>
+                        </div>
                       </div>
                     </div>
 
                     {/* Contact and Date Info */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                       <div className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
                         <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/40 rounded-full flex items-center justify-center">
                           <Phone className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -353,7 +380,7 @@ export const SalesView = function SalesView({
                     </div>
 
                     {/* Product Details */}
-                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-3">
                       <div className="flex items-center gap-2 p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200/50 dark:border-purple-800/50">
                         <div className="w-6 h-6 bg-purple-100 dark:bg-purple-900/40 rounded-full flex items-center justify-center">
                           <Package className="w-3 h-3 text-purple-700 dark:text-purple-300" />
@@ -480,8 +507,8 @@ export const SalesView = function SalesView({
                                 className="h-8 px-3 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700"
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  // TODO: Navigate to invoice details
-                                  console.log('View invoice details:', vente.invoice?.invoice_number)
+                                  setSelectedSale(vente)
+                                  setIsDetailModalOpen(true)
                                 }}
                               >
                                 <Eye className="w-3 h-3 mr-1" />
@@ -493,8 +520,7 @@ export const SalesView = function SalesView({
                                 className="h-8 px-3 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 dark:bg-indigo-900/20 dark:hover:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-700"
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  // TODO: Print invoice
-                                  console.log('Print invoice:', vente.invoice?.invoice_number)
+                                  printSale(vente)
                                 }}
                               >
                                 <Printer className="w-3 h-3 mr-1" />
@@ -509,20 +535,21 @@ export const SalesView = function SalesView({
                 </div>
                 <div className="flex flex-col gap-3">
                   {/* Status Indicator */}
-                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200/50 dark:border-slate-700/50">
-                    <div className={`w-3 h-3 rounded-full ${
-                      vente.invoice?.payment_status === 'paid' ? 'bg-green-500 animate-pulse' :
+                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800/50 rounded-full border border-slate-200/50 dark:border-slate-700/50">
+                    <div className={`w-2 h-2 rounded-full ${
+                      vente.invoice?.payment_status === 'paid' ? 'bg-green-500' :
                       vente.invoice?.payment_status === 'unpaid' ? 'bg-orange-500' :
                       vente.invoice?.payment_status === 'refunded' ? 'bg-red-500' :
                       'bg-slate-400'
                     }`}></div>
-                    <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                      {vente.invoice?.payment_status === 'paid' ? 'Payé' :
-                       vente.invoice?.payment_status === 'unpaid' ? 'Non payé' :
-                       vente.invoice?.payment_status === 'refunded' ? 'Remboursé' :
-                       'Statut inconnu'}
+                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                      {vente.invoice?.payment_status === 'paid' ? 'Payée' :
+                       vente.invoice?.payment_status === 'unpaid' ? 'En attente' :
+                       vente.invoice?.payment_status === 'refunded' ? 'Remboursée' :
+                       'Inconnue'}
                     </span>
                   </div>
+
                 </div>
               </div>
             </CardContent>
@@ -531,11 +558,38 @@ export const SalesView = function SalesView({
       </div>
 
       {filteredVentes.length === 0 && (
-        <div className="text-center py-12">
-          <Smartphone className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <p className="text-muted-foreground">Aucune vente trouvée</p>
+        <div className="text-center py-16">
+          <div className="relative mx-auto mb-6">
+            <div className="w-20 h-20 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700 rounded-full flex items-center justify-center shadow-lg">
+              <Smartphone className="w-10 h-10 text-slate-400 dark:text-slate-500" />
+            </div>
+            <div className="absolute -top-1 -right-1 w-6 h-6 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-md">
+              <Plus className="w-3 h-3 text-white" />
+            </div>
+          </div>
+          <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">
+            {searchTerm || paymentStatusFilter !== "all" ? "Aucune vente trouvée" : "Aucune vente enregistrée"}
+          </h3>
+          <p className="text-slate-600 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+            {searchTerm || paymentStatusFilter !== "all"
+              ? "Aucune vente ne correspond à vos critères de recherche. Essayez de modifier vos filtres."
+              : "Commencez à enregistrer vos premières ventes pour suivre vos transactions commerciales."
+            }
+          </p>
         </div>
       )}
+
+      <SalesDetailModal
+        isOpen={isDetailModalOpen}
+        onClose={() => {
+          setIsDetailModalOpen(false)
+          setSelectedSale(null)
+        }}
+        sale={selectedSale}
+        onPrint={(sale) => {
+          printSale(sale)
+        }}
+      />
     </div>
   )
 }

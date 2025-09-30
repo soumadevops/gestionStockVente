@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { Plus, Edit, Trash2, Search, Upload, Save, X, Package, TrendingUp, AlertTriangle, DollarSign, BarChart3, Filter } from "lucide-react"
+import { Plus, Edit, Trash2, Search, Upload, Save, X, Package, TrendingUp, AlertTriangle, DollarSign, BarChart3, Filter, ArrowLeft } from "lucide-react"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { createClient } from "@/lib/supabase/client"
 
@@ -529,6 +529,16 @@ export function StockView({ products, setProducts, user, searchTerm, setSearchTe
         <Card className="bg-white border-0 shadow-2xl overflow-hidden">
           <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10 px-8 py-6 border-b border-primary/10">
             <CardTitle className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCancelProductEdit}
+                className="mr-2 px-3 py-2 border-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 dark:border-green-500"
+                title="Retour à la liste des produits"
+              >
+                <ArrowLeft className="w-4 h-4 text-green-700 dark:text-green-400 mr-1" />
+                Retour
+              </Button>
               {editingProductId ? (
                 <>
                   <Edit className="w-6 h-6 text-primary" />

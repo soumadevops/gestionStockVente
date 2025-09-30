@@ -47,6 +47,7 @@ import {
   Printer,
   Menu,
   X as CloseIcon,
+  ArrowLeft,
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
@@ -109,6 +110,9 @@ export default function SalesManagementApp() {
   const [showAddInvoiceForm, setShowAddInvoiceForm] = useState(false)
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null)
   const [isSubmittingInvoice, setIsSubmittingInvoice] = useState(false)
+  const [isLoadingSales, setIsLoadingSales] = useState(false)
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false)
+  const [isLoadingInvoices, setIsLoadingInvoices] = useState(false)
   const [invoiceFormData, setInvoiceFormData] = useState({
     client_name: "",
     client_email: "",
@@ -212,6 +216,19 @@ export default function SalesManagementApp() {
   const [salesFilter, setSalesFilter] = useState("all")
 
   const supabase = createClient()
+
+  // Keyboard shortcuts - only escape for mobile menu
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Escape to close mobile menu
+      if (event.key === 'Escape' && isMobileMenuOpen) {
+        setIsMobileMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isMobileMenuOpen])
 
 
   const handleLogout = async () => {
@@ -2317,206 +2334,6 @@ export default function SalesManagementApp() {
     }
   }
 
-  const handleAddSale = useCallback(async () => {
-    if (!user) return
-
-    try {
-      if (!saleFormData.nom_prenom_client.trim() || !saleFormData.modele.trim()) {
-        toast({
-          title: "Erreur",
-          description: "Le nom du client et le modèle sont requis",
-          variant: "destructive",
-        })
-        return
-      }
-
-      // Validate stock availability before creating sale
-      const selectedProduct = products.find(p =>
-        p.nom_produit === saleFormData.nom_produit &&
-        p.marque === saleFormData.marque &&
-        p.couleur === saleFormData.modele
-      )
-
-      if (!selectedProduct) {
-        toast({
-          title: "Erreur",
-          description: "Produit non trouvé dans l'inventaire",
-          variant: "destructive",
-        })
-        return
-      }
-
-      if (selectedProduct.quantite_stock <= 0) {
-        toast({
-          title: "Erreur",
-          description: "Ce produit n'est plus en stock",
-          variant: "destructive",
-        })
-        return
-      }
-
-      // Create sale and invoice with transaction safety
-      const saleResult = await executeTransactionWithRollback(
-        // Main operation: create sale and auto-generate invoice
-        async () => {
-          // Prepare sale data excluding nom_produit (not in sales table schema)
-          const saleData = {
-            nom_prenom_client: saleFormData.nom_prenom_client,
-            numero_telephone: saleFormData.numero_telephone,
-            date_vente: saleFormData.date_vente,
-            modele: saleFormData.modele,
-            marque: saleFormData.marque,
-            imei_telephone: saleFormData.imei_telephone,
-            prix: Number.parseInt(saleFormData.prix),
-            user_id: user.id,
-          }
-
-          const { data, error } = await supabase
-            .from("sales")
-            .insert([saleData])
-            .select()
-
-          if (error) throw error
-          if (!data || !data[0]) throw new Error("Échec de la création de la vente")
-
-          const createdSale = data[0]
-
-          // Auto-generate invoice for the sale
-          const invoiceNumber = `INV-SALE-${createdSale.id.slice(-6).toUpperCase()}`
-
-          const invoiceData = {
-            invoice_number: invoiceNumber,
-            client_name: saleFormData.nom_prenom_client,
-            client_email: null,
-            client_phone: saleFormData.numero_telephone,
-            client_address: null,
-            invoice_date: new Date().toISOString(),
-            due_date: null,
-            subtotal: Number.parseInt(saleFormData.prix),
-            tax_rate: 18, // Default tax rate
-            tax_amount: Math.round(Number.parseInt(saleFormData.prix) * 0.18),
-            total_amount: Math.round(Number.parseInt(saleFormData.prix) * 1.18),
-            status: "pending", // As requested by user
-            payment_status: "unpaid",
-            notes: `Facture générée automatiquement pour la vente ${createdSale.id}`,
-            sales_id: createdSale.id, // Link to the sale
-            user_id: user.id,
-          }
-
-          const { data: invoiceResult, error: invoiceError } = await supabase
-            .from("invoices")
-            .insert([invoiceData])
-            .select()
-
-          if (invoiceError) throw invoiceError
-          if (!invoiceResult || !invoiceResult[0]) throw new Error("Échec de la création de la facture")
-
-          // Update sale with invoice_id
-          await supabase
-            .from("sales")
-            .update({ invoice_id: invoiceResult[0].id })
-            .eq("id", createdSale.id)
-            .eq("user_id", user.id)
-
-          // Create invoice item
-          const invoiceItemData = {
-            invoice_id: invoiceResult[0].id,
-            product_name: selectedProduct.nom_produit,
-            imei: saleFormData.imei_telephone,
-            quantity: 1,
-            unit_price: Number.parseInt(saleFormData.prix),
-            total_price: Number.parseInt(saleFormData.prix),
-            marque: saleFormData.marque,
-            modele: saleFormData.modele,
-            provenance: selectedProduct.provenance || null,
-            user_id: user.id,
-          }
-
-          const { error: itemError } = await supabase
-            .from("invoice_items")
-            .insert([invoiceItemData])
-
-          if (itemError) throw itemError
-
-          return { ...createdSale, invoice_id: invoiceResult[0].id }
-        },
-        // Rollback operation: delete sale and related invoice if stock deduction fails
-        async (createdSale: any) => {
-          console.log("Rolling back sale and invoice creation:", createdSale.id)
-
-          // Delete invoice items first
-          const { data: invoice } = await supabase
-            .from("invoices")
-            .select("id")
-            .eq("sales_id", createdSale.id)
-            .eq("user_id", user.id)
-            .single()
-
-          if (invoice) {
-            await supabase
-              .from("invoice_items")
-              .delete()
-              .eq("invoice_id", invoice.id)
-              .eq("user_id", user.id)
-
-            // Delete invoice
-            await supabase
-              .from("invoices")
-              .delete()
-              .eq("id", invoice.id)
-              .eq("user_id", user.id)
-          }
-
-          // Delete sale
-          await supabase
-            .from("sales")
-            .delete()
-            .eq("id", createdSale.id)
-            .eq("user_id", user.id)
-        }
-      )
-
-      // Deduct stock after successful sale creation
-      const saleItem = [{
-        product_name: selectedProduct.nom_produit,
-        marque: selectedProduct.marque,
-        modele: selectedProduct.couleur,
-        quantity: 1, // Sales are for individual items
-        unit_price: selectedProduct.prix_unitaire,
-      }]
-
-      await deductFromInventory(saleItem, user.id)
-
-      // Update local state only after everything succeeds
-      setVentes([saleResult, ...ventes])
-
-      setSaleFormData({
-        nom_prenom_client: "",
-        numero_telephone: "",
-        date_vente: "",
-        nom_produit: "",
-        modele: "",
-        marque: "",
-        imei_telephone: "",
-        prix: "",
-      })
-      setShowAddSaleForm(false)
-
-      setSuccessModal({
-        isOpen: true,
-        message: "Vente ajoutée avec succès!",
-        subMessage: "La nouvelle vente a été enregistrée dans le système et le stock mis à jour.",
-      })
-    } catch (error) {
-      console.error("Error adding sale:", error)
-      toast({
-        title: "Erreur",
-        description: `Erreur lors de l'ajout de la vente: ${error instanceof Error ? error.message : "Erreur inconnue"}`,
-        variant: "destructive",
-      })
-    }
-  }, [saleFormData, supabase, toast, ventes, products, deductFromInventory, user])
-
   const handleDeleteSale = async (id: string) => {
     if (!user) return
 
@@ -2546,10 +2363,9 @@ export default function SalesManagementApp() {
       if (error) throw error
 
       setVentes(ventes.filter((vente) => vente.id !== id))
-      setSuccessModal({
-        isOpen: true,
-        message: "Vente supprimée avec succès!",
-        subMessage: "La vente et sa facture associée ont été supprimées du système.",
+      toast({
+        title: "Succès",
+        description: "Vente supprimée avec succès",
       })
     } catch (error) {
       console.error("Error deleting sale:", error)
@@ -2592,10 +2408,9 @@ export default function SalesManagementApp() {
       if (error) throw error
 
       setVentes(ventes.filter((vente) => !ids.includes(vente.id)))
-      setSuccessModal({
-        isOpen: true,
-        message: `${ids.length} vente(s) supprimée(s) avec succès!`,
-        subMessage: "Les ventes et leurs factures associées ont été supprimées du système.",
+      toast({
+        title: "Succès",
+        description: `${ids.length} vente(s) supprimée(s) avec succès`,
       })
     } catch (error) {
       console.error("Error bulk deleting sales:", error)
@@ -2606,6 +2421,8 @@ export default function SalesManagementApp() {
       })
     }
   }
+
+
 
 
   if (loading) {
@@ -3176,9 +2993,9 @@ export default function SalesManagementApp() {
         </div>
       )}
 
-      <header className="bg-gradient-to-r from-indigo-600/10 via-purple-600/5 to-pink-600/10 border-b border-slate-200/50 dark:border-slate-700/50 shadow-xl backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 sm:p-6 space-y-4 sm:space-y-0">
+      <header className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-b border-slate-200/60 dark:border-slate-700/60 shadow-sm sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center p-4 lg:p-6 space-y-4 lg:space-y-0">
             <div className="flex items-center space-x-3 sm:space-x-4 min-w-0 flex-1">
               {companySettings.logo_url ? (
                 <div className="relative flex-shrink-0">
@@ -3207,21 +3024,23 @@ export default function SalesManagementApp() {
               </div>
             </div>
             <nav className="flex items-center space-x-4" role="navigation" aria-label="Navigation principale">
-              <div className="hidden sm:flex items-center space-x-2 text-sm text-muted-foreground">
-                <User className="w-4 h-4" aria-hidden="true" />
-                <span>{user?.email}</span>
+              <div className="hidden sm:flex items-center space-x-4 text-sm text-muted-foreground">
+                <div className="flex items-center space-x-2">
+                  <User className="w-4 h-4" aria-hidden="true" />
+                  <span>{user?.email}</span>
+                </div>
               </div>
 
               {/* Desktop Navigation */}
-              <div className="hidden md:flex space-x-2" role="tablist" aria-label="Onglets de navigation">
+              <nav className="hidden md:flex items-center space-x-1 bg-slate-100/50 dark:bg-slate-800/50 rounded-full p-1" role="tablist" aria-label="Navigation principale">
                 <Button
                   variant={activeTab === "dashboard" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setActiveTab("dashboard")}
-                  className={`transition-all duration-300 hover:scale-105 rounded-full px-6 py-2 ${
+                  className={`transition-all duration-200 rounded-full px-4 py-2 font-medium ${
                     activeTab === "dashboard"
-                      ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg ring-2 ring-indigo-500/30 hover:shadow-xl"
-                      : "hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 dark:hover:from-indigo-900/20 dark:hover:to-purple-900/20 hover:text-indigo-600 dark:hover:text-indigo-400"
+                      ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-700/50"
                   }`}
                   aria-selected={activeTab === "dashboard"}
                   role="tab"
@@ -3235,10 +3054,10 @@ export default function SalesManagementApp() {
                   variant={activeTab === "ventes" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setActiveTab("ventes")}
-                  className={`transition-all duration-300 hover:scale-105 rounded-full px-6 py-2 ${
+                  className={`transition-all duration-200 rounded-full px-4 py-2 font-medium ${
                     activeTab === "ventes"
-                      ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg ring-2 ring-emerald-500/30 hover:shadow-xl"
-                      : "hover:bg-gradient-to-r hover:from-emerald-50 hover:to-teal-50 dark:hover:from-emerald-900/20 dark:hover:to-teal-900/20 hover:text-emerald-600 dark:hover:text-emerald-400"
+                      ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-700/50"
                   }`}
                   aria-selected={activeTab === "ventes"}
                   role="tab"
@@ -3252,10 +3071,10 @@ export default function SalesManagementApp() {
                   variant={activeTab === "stock" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setActiveTab("stock")}
-                  className={`transition-all duration-300 hover:scale-105 rounded-full px-6 py-2 ${
+                  className={`transition-all duration-200 rounded-full px-4 py-2 font-medium ${
                     activeTab === "stock"
-                      ? "bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-lg ring-2 ring-amber-500/30 hover:shadow-xl"
-                      : "hover:bg-gradient-to-r hover:from-amber-50 hover:to-orange-50 dark:hover:from-amber-900/20 dark:hover:to-orange-900/20 hover:text-amber-600 dark:hover:text-amber-400"
+                      ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-700/50"
                   }`}
                   aria-selected={activeTab === "stock"}
                   role="tab"
@@ -3269,10 +3088,10 @@ export default function SalesManagementApp() {
                   variant={activeTab === "factures" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setActiveTab("factures")}
-                  className={`transition-all duration-300 hover:scale-105 rounded-full px-6 py-2 ${
+                  className={`transition-all duration-200 rounded-full px-4 py-2 font-medium ${
                     activeTab === "factures"
-                      ? "bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow-lg ring-2 ring-rose-500/30 hover:shadow-xl"
-                      : "hover:bg-gradient-to-r hover:from-rose-50 hover:to-pink-50 dark:hover:from-rose-900/20 dark:hover:to-pink-900/20 hover:text-rose-600 dark:hover:text-rose-400"
+                      ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-700/50"
                   }`}
                   aria-selected={activeTab === "factures"}
                   role="tab"
@@ -3286,10 +3105,10 @@ export default function SalesManagementApp() {
                   variant={activeTab === "settings" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setActiveTab("settings")}
-                  className={`transition-all duration-300 hover:scale-105 rounded-full px-6 py-2 ${
+                  className={`transition-all duration-200 rounded-full px-4 py-2 font-medium ${
                     activeTab === "settings"
-                      ? "bg-gradient-to-r from-slate-600 to-gray-600 text-white shadow-lg ring-2 ring-slate-500/30 hover:shadow-xl"
-                      : "hover:bg-gradient-to-r hover:from-slate-50 hover:to-gray-50 dark:hover:from-slate-900/20 dark:hover:to-gray-900/20 hover:text-slate-600 dark:hover:text-slate-400"
+                      ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-700/50"
                   }`}
                   aria-selected={activeTab === "settings"}
                   role="tab"
@@ -3299,16 +3118,17 @@ export default function SalesManagementApp() {
                   <Settings className="w-4 h-4 mr-2" aria-hidden="true" />
                   Paramètres
                 </Button>
+                <div className="w-px h-6 bg-slate-300 dark:bg-slate-600 mx-2"></div>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={handleLogout}
-                  className="hover:bg-red-100 hover:text-red-600 transition-colors"
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20 rounded-full px-4 py-2 font-medium"
                   aria-label="Se déconnecter"
                 >
                   Se déconnecter
                 </Button>
-              </div>
+              </nav>
 
               {/* Mobile Menu Button */}
               <div className="md:hidden">
@@ -3330,7 +3150,7 @@ export default function SalesManagementApp() {
 
             {/* Mobile Navigation Menu */}
             {isMobileMenuOpen && (
-              <div className="md:hidden absolute top-full left-0 right-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shadow-lg z-50">
+              <div className="md:hidden absolute top-full left-0 right-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shadow-lg z-50 animate-in slide-in-from-top-2 duration-300">
                 <div className="px-4 py-6 space-y-4">
                   {/* Mobile Admin Info */}
                   <div className="flex items-center space-x-2 text-sm text-muted-foreground pb-4 border-b border-slate-200 dark:border-slate-700">
@@ -3456,7 +3276,7 @@ export default function SalesManagementApp() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-4 sm:p-6" role="main">
+      <main className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8" role="main">
         {activeTab === "dashboard" ? (
           <div role="tabpanel" id="dashboard-panel" aria-labelledby="dashboard-tab">
             <DashboardView
@@ -3478,6 +3298,8 @@ export default function SalesManagementApp() {
               filteredVentes={filteredVentes}
               searchTerm={searchTerm}
               setSearchTerm={setSearchTerm}
+              paymentStatusFilter={salesFilter}
+              setPaymentStatusFilter={setSalesFilter}
               handleDeleteSale={handleDeleteSale}
               handleBulkDeleteSales={handleBulkDeleteSales}
               products={products}
