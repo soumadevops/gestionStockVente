@@ -6,7 +6,6 @@ import {
   FileText,
   Settings,
   Smartphone,
-  User,
   Menu,
   X as CloseIcon,
 } from "lucide-react"
@@ -57,19 +56,9 @@ export function Header({
               <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent truncate">
                 {companySettings.companyName}
               </h1>
-              {user && (
-                <p className="text-xs sm:text-sm text-muted-foreground flex items-center gap-2 truncate">
-                  <div className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0" aria-label="Statut en ligne"></div>
-                  <span className="truncate">Connecté en tant que {user.email}</span>
-                </p>
-              )}
             </div>
           </div>
           <nav className="flex items-center space-x-4" role="navigation" aria-label="Navigation principale">
-            <div className="hidden sm:flex items-center space-x-2 text-sm text-muted-foreground">
-              <User className="w-4 h-4" aria-hidden="true" />
-              <span>{user?.email}</span>
-            </div>
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex space-x-2" role="tablist" aria-label="Onglets de navigation">
@@ -191,11 +180,6 @@ export function Header({
           {isMobileMenuOpen && (
             <div className="md:hidden absolute top-full left-0 right-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shadow-lg z-50">
               <div className="px-4 py-6 space-y-4">
-                {/* Mobile Admin Info */}
-                <div className="flex items-center space-x-2 text-sm text-muted-foreground pb-4 border-b border-slate-200 dark:border-slate-700">
-                  <User className="w-4 h-4" aria-hidden="true" />
-                  <span>{user?.email}</span>
-                </div>
 
                 {/* Mobile Navigation Buttons */}
                 <div className="grid grid-cols-2 gap-3" role="tablist" aria-label="Navigation mobile">

@@ -37,7 +37,6 @@ import {
   DollarSign,
   BarChart3,
   Settings,
-  User,
   Building,
   Package,
   Upload,
@@ -322,7 +321,7 @@ export default function SalesManagementApp() {
           `).eq("user_id", user.id).order("created_at", { ascending: false }),
           supabase.from("products").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
           supabase.from("invoices").select("*, invoice_items (*)").eq("user_id", user.id).order("created_at", { ascending: false }),
-          supabase.from("company_settings").select("*").limit(1).single(),
+          supabase.from("company_settings").select("*").eq("user_id", user.id).single(),
         ])
 
         if (salesResponse.error) {
@@ -361,6 +360,34 @@ export default function SalesManagementApp() {
           setCompanySettings(loadedSettings)
           setTempSettings(loadedSettings)
           setLogoPreview(settingsResponse.data.logo_url || null)
+        } else {
+          // Create default settings for new user
+          const generateCompanyName = (email: string) => {
+            const namePart = email.split('@')[0]
+            const formattedName = namePart
+              .split(/[._-]/)
+              .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+              .join(' ')
+            return `Entreprise ${formattedName}`
+          }
+
+          const defaultSettings: CompanySettings = {
+            id: "",
+            nom_compagnie: generateCompanyName(user.email || ""),
+            nom_admin: user.email?.split('@')[0] || "Administrateur",
+            logo_url: "",
+            email: user.email || "",
+            phone: "",
+            address: "",
+            website: "",
+            tax_id: "",
+            currency: "XOF",
+            language: "fr",
+            timezone: "Africa/Dakar",
+          }
+          setCompanySettings(defaultSettings)
+          setTempSettings(defaultSettings)
+          setLogoPreview(null)
         }
       } catch (err) {
         // Error handling removed as requested
@@ -2231,6 +2258,7 @@ export default function SalesManagementApp() {
         currency: tempSettings.currency,
         language: tempSettings.language,
         timezone: tempSettings.timezone,
+        user_id: user.id,
       })
 
       const dbSettings: CompanySettings = {
@@ -3015,21 +3043,9 @@ export default function SalesManagementApp() {
                 <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent truncate">
                   {companySettings.nom_compagnie}
                 </h1>
-                {user && (
-                  <p className="text-xs sm:text-sm text-muted-foreground flex items-center gap-2 truncate">
-                    <div className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0" aria-label="Statut en ligne"></div>
-                    <span className="truncate">Connecté en tant que {user.email}</span>
-                  </p>
-                )}
               </div>
             </div>
             <nav className="flex items-center space-x-4" role="navigation" aria-label="Navigation principale">
-              <div className="hidden sm:flex items-center space-x-4 text-sm text-muted-foreground">
-                <div className="flex items-center space-x-2">
-                  <User className="w-4 h-4" aria-hidden="true" />
-                  <span>{user?.email}</span>
-                </div>
-              </div>
 
               {/* Desktop Navigation */}
               <nav className="hidden md:flex items-center space-x-1 bg-slate-100/50 dark:bg-slate-800/50 rounded-full p-1" role="tablist" aria-label="Navigation principale">
@@ -3152,11 +3168,6 @@ export default function SalesManagementApp() {
             {isMobileMenuOpen && (
               <div className="md:hidden absolute top-full left-0 right-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shadow-lg z-50 animate-in slide-in-from-top-2 duration-300">
                 <div className="px-4 py-6 space-y-4">
-                  {/* Mobile Admin Info */}
-                  <div className="flex items-center space-x-2 text-sm text-muted-foreground pb-4 border-b border-slate-200 dark:border-slate-700">
-                    <User className="w-4 h-4" aria-hidden="true" />
-                    <span>{user?.email}</span>
-                  </div>
 
                   {/* Mobile Navigation Buttons */}
                   <div className="grid grid-cols-2 gap-3" role="tablist" aria-label="Navigation mobile">
